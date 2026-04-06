@@ -1,0 +1,17 @@
+node_modules/
+dist/
+allure-results/
+allure-report/
+.env
+*.env.local
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-error.log*

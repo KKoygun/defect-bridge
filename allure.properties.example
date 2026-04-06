@@ -1,0 +1,8 @@
+# Copy this file to your allure-results/ directory before generating the report.
+# It tells Allure how to turn issue ticket keys into clickable Jira links.
+#
+# Usage:
+#   cp allure.properties.example allure-results/allure.properties
+#   npx allure generate allure-results --clean -o allure-report
+
+allure.link.issue.pattern=https://yourworkspace.atlassian.net/browse/{}

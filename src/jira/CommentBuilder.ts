@@ -1,0 +1,115 @@
+import { ParsedFailure } from '../allure/types';
+
+/**
+ * CommentBuilder — builds Jira comments in Atlassian Document Format (ADF).
+ *
+ * Jira Cloud REST API v3 requires ADF for comment bodies — plain text or
+ * markdown are not accepted. ADF is a JSON tree of typed nodes.
+ *
+ * https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
+ */
+export class CommentBuilder {
+  build(failure: ParsedFailure, env: string, runId?: string): object {
+    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    const durationText = failure.duration !== undefined ? `${failure.duration}s` : 'N/A';
+
+    return {
+      body: {
+        version: 1,
+        type: 'doc',
+        content: [
+          this.heading('🔴 Automated Test is Failing'),
+          this.divider(),
+          this.infoTable(failure, timestamp, env, durationText, runId),
+          this.divider(),
+          this.heading('Error', 3),
+          this.codeBlock(this.trimTrace(failure.errorMessage)),
+          ...(failure.errorTrace
+            ? [this.heading('Stack Trace', 3), this.codeBlock(this.trimTrace(failure.errorTrace, 1500))]
+            : []),
+          this.divider(),
+          this.note('Screenshot attached to this comment if available.'),
+        ],
+      },
+    };
+  }
+
+  // ── ADF node builders ────────────────────────────────────────────────────
+
+  private heading(text: string, level = 2): object {
+    return {
+      type: 'heading',
+      attrs: { level },
+      content: [{ type: 'text', text }],
+    };
+  }
+
+  private divider(): object {
+    return { type: 'rule' };
+  }
+
+  private infoTable(
+    failure: ParsedFailure,
+    timestamp: string,
+    env: string,
+    duration: string,
+    runId?: string
+  ): object {
+    const rows = [
+      ['Scenario', failure.scenarioName],
+      ['Feature', failure.fullName ?? 'N/A'],
+      ['Environment', env],
+      ['Duration', duration],
+      ['Timestamp', timestamp],
+      ...(runId ? [['CI Run', runId]] : []),
+    ];
+
+    return {
+      type: 'table',
+      attrs: { isNumberColumnEnabled: false, layout: 'default' },
+      content: rows.map(([key, value]) => ({
+        type: 'tableRow',
+        content: [
+          {
+            type: 'tableCell',
+            attrs: {},
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: key, marks: [{ type: 'strong' }] }],
+              },
+            ],
+          },
+          {
+            type: 'tableCell',
+            attrs: {},
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }],
+          },
+        ],
+      })),
+    };
+  }
+
+  private codeBlock(text: string): object {
+    return {
+      type: 'codeBlock',
+      attrs: {},
+      content: [{ type: 'text', text }],
+    };
+  }
+
+  private note(text: string): object {
+    return {
+      type: 'paragraph',
+      content: [
+        { type: 'text', text: '📎 ', },
+        { type: 'text', text, marks: [{ type: 'em' }] },
+      ],
+    };
+  }
+
+  private trimTrace(text: string, maxLength = 800): string {
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength) + '\n... (truncated)';
+  }
+}
