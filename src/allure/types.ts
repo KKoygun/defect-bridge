@@ -45,7 +45,10 @@ export interface ParsedFailure {
   fullName?: string;
   errorMessage: string;
   errorTrace?: string;
-  jiraTicket: string;
+  /** Jira ticket key extracted from @allure.label.issue=PROJ-123 */
+  jiraTicket?: string;
+  /** GitHub Issue number extracted from @allure.label.github_issue=42 */
+  githubIssue?: number;
   screenshotPath?: string;
   duration?: number;
 }

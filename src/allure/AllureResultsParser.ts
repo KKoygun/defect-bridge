@@ -4,10 +4,10 @@ import { AllureResult, ParsedFailure } from './types';
 
 /**
  * AllureResultsParser — reads allure-results/*.json and extracts failed
- * scenarios that carry a Jira issue label.
+ * scenarios that carry a Jira or GitHub issue label.
  *
  * Allure result files are generated per-test by:
- *   - allure-cucumberjs  →  tag @allure.label.issue=DEFECT-123 or @issue:DEFECT-123
+ *   - allure-cucumberjs  →  @allure.label.issue=DEFECT-123 or @allure.label.github_issue=42
  *   - allure-playwright  →  allure.label('issue', 'DEFECT-123')
  *
  * This parser is framework-agnostic — it works with any allure-results directory.
@@ -48,8 +48,14 @@ export class AllureResultsParser {
       //      e.g. @allure.label.issue=DEFECT-123 or @issue:DEFECT-123 tags in Cucumber/Playwright
       const issueLink  = result.links?.find((l) => l.type === 'issue');
       const issueLabel = result.labels.find((l) => l.name === 'issue');
-      const ticketKey  = issueLink?.name ?? issueLabel?.value;
-      if (!ticketKey) continue;
+      const jiraTicket = issueLink?.name ?? issueLabel?.value;
+
+      // Resolve GitHub Issue number — tag @allure.label.github_issue=42
+      const githubLabel = result.labels.find((l) => l.name === 'github_issue');
+      const githubIssue = githubLabel ? parseInt(githubLabel.value, 10) : undefined;
+
+      // Skip entirely if neither destination is tagged
+      if (!jiraTicket && !githubIssue) continue;
 
       const screenshotPath = this.findScreenshot(result, this.resultsDir);
 
@@ -64,13 +70,14 @@ export class AllureResultsParser {
         fullName: result.fullName,
         errorMessage: result.statusDetails?.message ?? 'No error message captured',
         errorTrace: result.statusDetails?.trace,
-        jiraTicket: ticketKey,
+        jiraTicket,
+        githubIssue,
         screenshotPath,
         duration,
       });
     }
 
-    console.log(`[Parser] ${failures.length} failure(s) linked to Jira tickets`);
+    console.log(`[Parser] ${failures.length} failure(s) linked to Jira/GitHub issues`);
     return failures;
   }
 
