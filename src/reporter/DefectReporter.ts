@@ -1,8 +1,10 @@
+import * as fs from 'fs';
 import { AllureResultsParser } from '../allure/AllureResultsParser';
 import { JiraClient } from '../jira/JiraClient';
 import { CommentBuilder } from '../jira/CommentBuilder';
 import { GitHubClient } from '../github/GitHubClient';
 import { GitHubCommentBuilder } from '../github/GitHubCommentBuilder';
+import { ParsedFailure } from '../allure/types';
 import { config } from '../config';
 
 export interface DefectReporterOptions {
@@ -166,6 +168,53 @@ export class DefectReporter {
     if (errored) console.log(`  Errors   : ${errored}`);
     console.log('──────────────────────────────────────────────────────\n');
 
+    this.writeStepSummary(failures, reported, skipped, errored);
+
     if (errored > 0) process.exit(1);
+  }
+
+  // ── GitHub Actions Job Summary ────────────────────────────────────────────
+  /**
+   * Writes a Markdown summary table to $GITHUB_STEP_SUMMARY so the report is
+   * visible directly on the Actions run page — no artifact download required.
+   * No-op when running outside GitHub Actions.
+   */
+  private writeStepSummary(
+    failures: ParsedFailure[],
+    reported: number,
+    skipped: number,
+    errored: number
+  ): void {
+    const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+    if (!summaryPath) return;
+
+    const dryTag = this.dryRun ? ' _(dry run)_' : '';
+    const lines: string[] = [
+      `## defect-bridge${dryTag}`,
+      '',
+      `**Environment:** \`${config.run.env}\`  `,
+      `**Results dir:** \`${config.allure.resultsDir}\``,
+      '',
+    ];
+
+    if (failures.length === 0) {
+      lines.push('✅ No failures with issue tags found.');
+    } else {
+      lines.push('| Scenario | Jira | GitHub | Status |');
+      lines.push('|---|---|---|---|');
+
+      for (const f of failures) {
+        const jira   = f.jiraTicket  ? `\`${f.jiraTicket}\``   : '—';
+        const gh     = f.githubIssue ? `#${f.githubIssue}`     : '—';
+        const status = errored > 0   ? '❌ error' : this.dryRun ? '🔍 dry run' : '✅ reported';
+        lines.push(`| ${f.scenarioName} | ${jira} | ${gh} | ${status} |`);
+      }
+
+      lines.push('');
+      lines.push(`**Reported:** ${reported} &nbsp; **Skipped:** ${skipped} &nbsp; **Errors:** ${errored}`);
+    }
+
+    lines.push('');
+    fs.appendFileSync(summaryPath, lines.join('\n'));
   }
 }
