@@ -54,7 +54,7 @@ describe('AllureResultsParser', () => {
     expect(failures[0].githubIssue).toBe(42);
   });
 
-  it('skips passed tests', () => {
+  it('skips passed tests even when they carry an issue label', () => {
     mockFs.readdirSync.mockReturnValue(['abc-result.json'] as unknown as ReturnType<typeof fs.readdirSync>);
     mockFs.readFileSync.mockReturnValue(makeResult({ status: 'passed' }));
     const parser = new AllureResultsParser('allure-results');
@@ -101,5 +101,40 @@ describe('AllureResultsParser', () => {
     mockFs.readFileSync.mockImplementation(() => { throw new Error('permission denied'); });
     const parser = new AllureResultsParser('allure-results');
     expect(parser.parse()).toHaveLength(0);
+  });
+
+  it('skips a malformed result file and still reads the others', () => {
+    mockFs.readdirSync.mockReturnValue(['bad-result.json', 'good-result.json'] as unknown as ReturnType<typeof fs.readdirSync>);
+    mockFs.readFileSync.mockImplementation((file) =>
+      String(file).includes('bad') ? '{"uuid": "x", "status": ' : makeResult()
+    );
+    const failures = new AllureResultsParser('allure-results').parse();
+    expect(failures).toHaveLength(1);
+    expect(failures[0].jiraTicket).toBe('PROJ-99');
+  });
+
+  it('reads both destinations when a failure has several labels', () => {
+    mockFs.readdirSync.mockReturnValue(['abc-result.json'] as unknown as ReturnType<typeof fs.readdirSync>);
+    mockFs.readFileSync.mockReturnValue(
+      makeResult({
+        labels: [
+          { name: 'feature', value: 'Checkout' },
+          { name: 'tag', value: '@smoke' },
+          { name: 'issue', value: 'PROJ-7' },
+          { name: 'github_issue', value: '12' },
+        ],
+      })
+    );
+    const [failure] = new AllureResultsParser('allure-results').parse();
+    expect(failure).toMatchObject({ jiraTicket: 'PROJ-7', githubIssue: 12 });
+  });
+
+  it('prefers an issue link over an issue label', () => {
+    mockFs.readdirSync.mockReturnValue(['abc-result.json'] as unknown as ReturnType<typeof fs.readdirSync>);
+    mockFs.readFileSync.mockReturnValue(
+      makeResult({ links: [{ name: 'PROJ-1', url: 'https://acme.atlassian.net/browse/PROJ-1', type: 'issue' }] })
+    );
+    const [failure] = new AllureResultsParser('allure-results').parse();
+    expect(failure.jiraTicket).toBe('PROJ-1');
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { CommentBuilder } from '../jira/CommentBuilder';
 import { ParsedFailure } from '../allure/types';
 
@@ -74,5 +74,30 @@ describe('CommentBuilder', () => {
     const failure = { ...baseFailure, errorMessage: 'e'.repeat(900) };
     const result = builder.build(failure, 'dev');
     expect(JSON.stringify(result)).toContain('truncated');
+  });
+
+  describe('ADF structure', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // A diff in this snapshot means the comment Jira shows has changed — review it on purpose.
+    it('matches the snapshot', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-04-05T14:32:00Z'));
+
+      const result = builder.build(
+        {
+          ...baseFailure,
+          fullName: 'TodoMVC Task Management > Add a todo item',
+          duration: 3,
+          errorTrace: 'at TodoPage.addTodo (src/pages/TodoPage.ts:24:5)',
+        },
+        'staging',
+        '147'
+      );
+
+      expect(result).toMatchSnapshot();
+    });
   });
 });

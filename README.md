@@ -1,5 +1,7 @@
 # defect-bridge
 
+[![Test](https://github.com/KKoygun/defect-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/KKoygun/defect-bridge/actions/workflows/test.yml)
+
 When a test fails, the question everyone asks is whether it is already tracked.
 defect-bridge makes that answerable directly from the Allure report — no ticket
 searching, no manual updates.
