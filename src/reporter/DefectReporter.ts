@@ -1,8 +1,6 @@
 import * as fs from 'fs';
 import { AllureResultsParser } from '../allure/AllureResultsParser';
-import { JiraClient } from '../jira/JiraClient';
-import { CommentBuilder } from '../jira/CommentBuilder';
-import { adfToText } from '../jira/adfToText';
+import { JiraClient, JiraCloudClient, JiraDataCenterClient, previewComment } from '../jira/JiraClient';
 import { GitHubClient } from '../github/GitHubClient';
 import { GitHubCommentBuilder } from '../github/GitHubCommentBuilder';
 import { ParsedFailure } from '../allure/types';
@@ -37,7 +35,6 @@ export class DefectReporter {
 
   // Jira
   private readonly jira?: JiraClient;
-  private readonly commentBuilder = new CommentBuilder();
 
   // GitHub
   private readonly github?: GitHubClient;
@@ -48,7 +45,10 @@ export class DefectReporter {
     this.parser = new AllureResultsParser(config.allure.resultsDir);
 
     if (config.jira && !this.dryRun) {
-      this.jira = new JiraClient(config.jira.baseUrl, config.jira.email, config.jira.apiToken, retry);
+      this.jira =
+        config.jira.flavor === 'datacenter'
+          ? new JiraDataCenterClient(config.jira.baseUrl, config.jira.pat, retry)
+          : new JiraCloudClient(config.jira.baseUrl, config.jira.email, config.jira.apiToken, retry);
     }
 
     if (config.github && !this.dryRun) {
@@ -62,7 +62,7 @@ export class DefectReporter {
 
     console.log(`\n── defect-bridge${dryTag} ────────────────────────────────`);
     console.log(`Allure results : ${config.allure.resultsDir}`);
-    if (config.jira)   console.log(`Jira           : ${config.jira.baseUrl}`);
+    if (config.jira)   console.log(`Jira           : ${config.jira.baseUrl} (${config.jira.flavor})`);
     if (config.github) console.log(`GitHub         : ${config.github.repo}`);
     console.log(`Environment    : ${config.run.env}`);
     if (config.run.runId) console.log(`CI Run ID      : ${config.run.runId}`);
@@ -104,8 +104,7 @@ export class DefectReporter {
           } else {
             console.log(`  Jira: ${issue.key} — ${issue.summary}`);
 
-            const commentBody = this.commentBuilder.build(failure, config.run.env, config.run.runId, marker);
-            await this.jira.addComment(failure.jiraTicket, commentBody);
+            await this.jira.addComment(failure.jiraTicket, failure, { env: config.run.env, runId: config.run.runId, marker });
             console.log(`  ✅ Jira comment posted`);
 
             if (failure.screenshotPath) {
@@ -171,8 +170,8 @@ export class DefectReporter {
     const { env, runId } = this.config.run;
 
     if (failure.jiraTicket) {
-      const comment = this.commentBuilder.build(failure, env, runId, marker) as { body: Parameters<typeof adfToText>[0] };
-      this.printBlock(`Jira comment for ${failure.jiraTicket}:`, adfToText(comment.body));
+      const text = previewComment(this.config.jiraFlavor, failure, { env, runId, marker });
+      this.printBlock(`Jira comment for ${failure.jiraTicket}:`, text);
       if (failure.screenshotPath) console.log(`  [DRY RUN] Would attach ${failure.screenshotPath}`);
       summary.reported++;
     }

@@ -10,17 +10,30 @@ export class ConfigError extends Error {}
  * whichever destinations have credentials present. A dry run needs neither:
  * it only prints the comments it would post.
  *
- * Jira   → JIRA_BASE_URL + JIRA_EMAIL + JIRA_API_TOKEN
- * GitHub → GITHUB_TOKEN + GITHUB_REPO
+ * Jira Cloud       → JIRA_BASE_URL + JIRA_EMAIL + JIRA_API_TOKEN
+ * Jira Data Center → JIRA_FLAVOR=datacenter + JIRA_BASE_URL + JIRA_PAT
+ * GitHub           → GITHUB_TOKEN + GITHUB_REPO
  */
+const jiraBaseUrl = z.string().url('JIRA_BASE_URL must be a valid URL (e.g. https://acme.atlassian.net)');
+
 const ConfigSchema = z
   .object({
+    jiraFlavor: z.enum(['cloud', 'datacenter'], { message: 'JIRA_FLAVOR must be "cloud" or "datacenter"' }),
+
     jira: z
-      .object({
-        baseUrl:  z.string().url('JIRA_BASE_URL must be a valid URL (e.g. https://acme.atlassian.net)'),
-        email:    z.string().email('JIRA_EMAIL must be a valid email address'),
-        apiToken: z.string().min(1, 'JIRA_API_TOKEN is required when JIRA_BASE_URL is set'),
-      })
+      .discriminatedUnion('flavor', [
+        z.object({
+          flavor:   z.literal('cloud'),
+          baseUrl:  jiraBaseUrl,
+          email:    z.string().email('JIRA_EMAIL must be a valid email address'),
+          apiToken: z.string().min(1, 'JIRA_API_TOKEN is required for Jira Cloud'),
+        }),
+        z.object({
+          flavor:  z.literal('datacenter'),
+          baseUrl: jiraBaseUrl,
+          pat:     z.string().min(1, 'JIRA_PAT (personal access token) is required for Jira Data Center'),
+        }),
+      ])
       .optional(),
 
     github: z
@@ -59,14 +72,16 @@ export interface CliOptions {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, cli: CliOptions = {}): Config {
+  const jiraFlavor = (env.JIRA_FLAVOR || 'cloud').toLowerCase();
+
   const raw = {
-    jira: env.JIRA_BASE_URL
-      ? {
-          baseUrl:  env.JIRA_BASE_URL,
-          email:    env.JIRA_EMAIL ?? '',
-          apiToken: env.JIRA_API_TOKEN ?? '',
-        }
-      : undefined,
+    jiraFlavor,
+
+    jira: !env.JIRA_BASE_URL
+      ? undefined
+      : jiraFlavor === 'datacenter'
+        ? { flavor: jiraFlavor, baseUrl: env.JIRA_BASE_URL, pat: env.JIRA_PAT ?? '' }
+        : { flavor: jiraFlavor, baseUrl: env.JIRA_BASE_URL, email: env.JIRA_EMAIL ?? '', apiToken: env.JIRA_API_TOKEN ?? '' },
 
     github: env.GITHUB_TOKEN
       ? {

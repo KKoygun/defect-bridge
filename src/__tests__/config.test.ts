@@ -32,3 +32,19 @@ describe('loadConfig', () => {
     expect(loadConfig({ ...jiraEnv, CI_RUN_ID: 'local-1', GITHUB_RUN_NUMBER: '42' }).run.runId).toBe('local-1');
   });
 });
+
+describe('Jira flavor', () => {
+  it('defaults to Cloud', () => {
+    expect(loadConfig(jiraEnv).jira).toMatchObject({ flavor: 'cloud', email: 'qa@acme.com' });
+  });
+
+  it('needs a personal access token for Data Center', () => {
+    const dc = { JIRA_FLAVOR: 'datacenter', JIRA_BASE_URL: 'https://jira.bank.local' };
+    expect(() => loadConfig(dc)).toThrow('JIRA_PAT');
+    expect(loadConfig({ ...dc, JIRA_PAT: 'pat' }).jira).toMatchObject({ flavor: 'datacenter', pat: 'pat' });
+  });
+
+  it('rejects an unknown flavor', () => {
+    expect(() => loadConfig({ ...jiraEnv, JIRA_FLAVOR: 'server' })).toThrow('JIRA_FLAVOR');
+  });
+});

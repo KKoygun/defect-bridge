@@ -1,6 +1,6 @@
 import { AxiosError, AxiosHeaders } from 'axios';
 import { afterEach, describe, expect, it } from 'vitest';
-import { JiraClient } from '../jira/JiraClient';
+import { JiraCloudClient } from '../jira/JiraClient';
 import { retryDelay } from '../http/retry';
 import { Reply, startFakeServer } from './fakeServer';
 
@@ -18,7 +18,7 @@ async function jiraReplying(...statuses: number[]) {
     const status = statuses[Math.min(call++, statuses.length - 1)];
     return status === 200 ? { status, body: { key: 'PROJ-1', fields: { summary: 'ok' } } } : { status, body: {} };
   });
-  return new JiraClient(server.url, 'qa@example.com', 'token', { attempts: 3, baseDelayMs: 1 });
+  return new JiraCloudClient(server.url, 'qa@example.com', 'token', { attempts: 3, baseDelayMs: 1 });
 }
 
 describe('retry', () => {
