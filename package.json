@@ -1,7 +1,7 @@
 {
   "name": "defect-bridge",
   "version": "1.0.0",
-  "description": "Links Allure test failure results to Jira defect tickets — posts failure details as comments on tagged scenarios",
+  "description": "Posts Allure test failures as comments on the Jira (Cloud or Data Center) or GitHub issues they are tagged with",
   "scripts": {
     "report": "ts-node scripts/run.ts",
     "example": "ts-node scripts/run.ts --dry-run --results-dir=examples/allure-results",
