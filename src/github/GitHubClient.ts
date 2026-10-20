@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { RetryOptions, withRetry } from '../http/retry';
 
 /**
  * GitHubClient — thin REST API client for GitHub Issues.
@@ -7,13 +8,13 @@ import axios from 'axios';
  * Docs: https://docs.github.com/en/rest/issues/comments
  */
 export class GitHubClient {
-  private readonly baseUrl = 'https://api.github.com';
-
   private readonly headers: Record<string, string>;
 
   constructor(
-    private readonly token: string,
-    private readonly repo: string   // 'owner/repo'
+    token: string,
+    private readonly repo: string, // 'owner/repo'
+    private readonly apiUrl = 'https://api.github.com',
+    private readonly retry: RetryOptions = {}
   ) {
     this.headers = {
       Authorization: `Bearer ${token}`,
@@ -24,13 +25,11 @@ export class GitHubClient {
   }
 
   /** Verify the issue exists and return its number + title. */
-  async getIssue(
-    issueNumber: number
-  ): Promise<{ number: number; title: string } | null> {
+  async getIssue(issueNumber: number): Promise<{ number: number; title: string } | null> {
     try {
-      const response = await axios.get(
-        `${this.baseUrl}/repos/${this.repo}/issues/${issueNumber}`,
-        { headers: this.headers }
+      const response = await withRetry(
+        () => axios.get(`${this.apiUrl}/repos/${this.repo}/issues/${issueNumber}`, { headers: this.headers }),
+        this.retry
       );
       return {
         number: response.data.number as number,
@@ -42,12 +41,31 @@ export class GitHubClient {
     }
   }
 
+  /** True if any comment on the issue already contains the marker. */
+  async hasComment(issueNumber: number, marker: string): Promise<boolean> {
+    // Comments come oldest first, 100 per page; ten pages is plenty for a defect ticket
+    for (let page = 1; page <= 10; page++) {
+      const response = await withRetry(
+        () =>
+          axios.get(`${this.apiUrl}/repos/${this.repo}/issues/${issueNumber}/comments`, {
+            headers: this.headers,
+            params: { per_page: 100, page },
+          }),
+        this.retry
+      );
+      const comments = response.data as Array<{ body?: string }>;
+      if (comments.some((c) => c.body?.includes(marker))) return true;
+      if (comments.length < 100) return false;
+    }
+    return false;
+  }
+
   /** Post a Markdown comment on a GitHub Issue. */
   async addComment(issueNumber: number, body: string): Promise<number> {
-    const response = await axios.post(
-      `${this.baseUrl}/repos/${this.repo}/issues/${issueNumber}/comments`,
-      { body },
-      { headers: this.headers }
+    const response = await withRetry(
+      () =>
+        axios.post(`${this.apiUrl}/repos/${this.repo}/issues/${issueNumber}/comments`, { body }, { headers: this.headers }),
+      this.retry
     );
     return response.data.id as number;
   }

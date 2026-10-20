@@ -29,6 +29,7 @@ const ConfigSchema = z
         repo: z
           .string()
           .regex(/^[^/]+\/[^/]+$/, 'GITHUB_REPO must be in owner/repo format (e.g. acme/my-repo)'),
+        apiUrl: z.string().url('GITHUB_API_URL must be a valid URL'),
       })
       .optional(),
 
@@ -40,6 +41,8 @@ const ConfigSchema = z
       env:    z.string().min(1),
       runId:  z.string().optional(),
       dryRun: z.boolean(),
+      /** Exit 1 when a ticket could not be updated. Off by default so a Jira outage does not fail the build. */
+      failOnReportError: z.boolean(),
     }),
   })
   .refine((data) => data.run.dryRun || data.jira !== undefined || data.github !== undefined, {
@@ -67,8 +70,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cli: CliOptions
 
     github: env.GITHUB_TOKEN
       ? {
-          token: env.GITHUB_TOKEN,
-          repo:  env.GITHUB_REPO ?? '',
+          token:  env.GITHUB_TOKEN,
+          repo:   env.GITHUB_REPO ?? '',
+          // Set by GitHub Actions, so GitHub Enterprise Server works too
+          apiUrl: env.GITHUB_API_URL ?? 'https://api.github.com',
         }
       : undefined,
 
@@ -80,6 +85,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cli: CliOptions
       env:    env.ENV ?? 'dev',
       runId:  env.CI_RUN_ID ?? env.GITHUB_RUN_NUMBER ?? undefined,
       dryRun: cli.dryRun ?? false,
+      failOnReportError: env.FAIL_ON_REPORT_ERROR === 'true',
     },
   };
 

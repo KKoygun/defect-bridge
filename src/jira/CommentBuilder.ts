@@ -9,7 +9,7 @@ import { ParsedFailure } from '../allure/types';
  * https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
  */
 export class CommentBuilder {
-  build(failure: ParsedFailure, env: string, runId?: string): object {
+  build(failure: ParsedFailure, env: string, runId?: string, marker?: string): object {
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
     const durationText = failure.duration !== undefined ? `${failure.duration}s` : 'N/A';
 
@@ -29,6 +29,8 @@ export class CommentBuilder {
             : []),
           this.divider(),
           this.note('Screenshot attached to this comment if available.'),
+          // Lets a re-run of the same CI run find this comment and skip it
+          ...(marker ? [this.marker(marker)] : []),
         ],
       },
     };
@@ -105,6 +107,13 @@ export class CommentBuilder {
         { type: 'text', text: '📎 ', },
         { type: 'text', text, marks: [{ type: 'em' }] },
       ],
+    };
+  }
+
+  private marker(text: string): object {
+    return {
+      type: 'paragraph',
+      content: [{ type: 'text', text, marks: [{ type: 'code' }] }],
     };
   }
 

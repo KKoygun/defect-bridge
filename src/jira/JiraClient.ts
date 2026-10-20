@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
 import FormData from 'form-data';
+import { RetryOptions, withRetry } from '../http/retry';
 
 /**
  * JiraClient — thin REST API v3 client for Jira Cloud.
@@ -13,9 +14,10 @@ export class JiraClient {
   private readonly client: AxiosInstance;
 
   constructor(
-    private readonly baseUrl: string,
-    private readonly email: string,
-    private readonly apiToken: string
+    baseUrl: string,
+    email: string,
+    apiToken: string,
+    private readonly retry: RetryOptions = {}
   ) {
     const token = Buffer.from(`${email}:${apiToken}`).toString('base64');
 
@@ -32,7 +34,7 @@ export class JiraClient {
   /** Verify the ticket exists and return its summary. */
   async getIssue(ticketKey: string): Promise<{ key: string; summary: string } | null> {
     try {
-      const response = await this.client.get(`/issue/${ticketKey}?fields=summary`);
+      const response = await withRetry(() => this.client.get(`/issue/${ticketKey}?fields=summary`), this.retry);
       return {
         key: response.data.key,
         summary: response.data.fields.summary,
@@ -45,9 +47,19 @@ export class JiraClient {
     }
   }
 
+  /** True if one of the latest 100 comments on the ticket contains the marker. */
+  async hasComment(ticketKey: string, marker: string): Promise<boolean> {
+    const response = await withRetry(
+      () => this.client.get(`/issue/${ticketKey}/comment`, { params: { maxResults: 100, orderBy: '-created' } }),
+      this.retry
+    );
+    const comments = response.data.comments as Array<{ body: unknown }>;
+    return comments.some((c) => JSON.stringify(c.body).includes(marker));
+  }
+
   /** Add an ADF comment to a Jira ticket. */
   async addComment(ticketKey: string, body: object): Promise<string> {
-    const response = await this.client.post(`/issue/${ticketKey}/comment`, body);
+    const response = await withRetry(() => this.client.post(`/issue/${ticketKey}/comment`, body), this.retry);
     return response.data.id as string;
   }
 
@@ -61,24 +73,19 @@ export class JiraClient {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
 
-    const form = new FormData();
-    form.append('file', fs.createReadStream(filePath), {
-      filename: path.basename(filePath),
-      contentType,
-    });
-
-    const token = Buffer.from(`${this.email}:${this.apiToken}`).toString('base64');
-
-    await axios.post(
-      `${this.baseUrl.replace(/\/$/, '')}/rest/api/3/issue/${ticketKey}/attachments`,
-      form,
-      {
+    // The form is rebuilt per attempt: a file stream can only be read once
+    await withRetry(() => {
+      const form = new FormData();
+      form.append('file', fs.createReadStream(filePath), {
+        filename: path.basename(filePath),
+        contentType,
+      });
+      return this.client.post(`/issue/${ticketKey}/attachments`, form, {
         headers: {
           ...form.getHeaders(),
-          Authorization: `Basic ${token}`,
           'X-Atlassian-Token': 'no-check', // required for attachment uploads
         },
-      }
-    );
+      });
+    }, this.retry);
   }
 }

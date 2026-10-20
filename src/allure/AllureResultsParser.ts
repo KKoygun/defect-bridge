@@ -66,6 +66,7 @@ export class AllureResultsParser {
 
       failures.push({
         uuid: result.uuid,
+        testId: result.historyId ?? result.uuid,
         scenarioName: result.name,
         fullName: result.fullName,
         errorMessage: result.statusDetails?.message ?? 'No error message captured',
