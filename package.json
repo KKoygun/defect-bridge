@@ -4,6 +4,7 @@
   "description": "Links Allure test failure results to Jira defect tickets — posts failure details as comments on tagged scenarios",
   "scripts": {
     "report": "ts-node scripts/run.ts",
+    "example": "ts-node scripts/run.ts --dry-run --results-dir=examples/allure-results",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "allure:generate": "allure generate allure-results --clean -o allure-report",

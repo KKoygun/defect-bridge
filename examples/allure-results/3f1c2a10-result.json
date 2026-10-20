@@ -1,0 +1,46 @@
+{
+  "stage": "finished",
+  "steps": [],
+  "parameters": [],
+  "links": [],
+  "attachments": [
+    {
+      "name": "screenshot",
+      "source": "3f1c2a10-attachment.png",
+      "type": "image/png"
+    }
+  ],
+  "uuid": "3f1c2a10-0b7e-4c55-9d41-6a2d8e1f7c01",
+  "historyId": "c1a8e2f7a9b14d3e",
+  "name": "Add a single todo item",
+  "fullName": "TodoMVC Task Management > Add a single todo item",
+  "status": "failed",
+  "statusDetails": {
+    "message": "locator.fill: Timeout 5000ms exceeded.\nCall log:\n  - waiting for locator('.new-todo')",
+    "trace": "at TodoPage.addTodo (src/pages/TodoPage.ts:42:24)\nat CustomWorld.<anonymous> (src/steps/todo.steps.ts:22:3)"
+  },
+  "labels": [
+    {
+      "name": "feature",
+      "value": "TodoMVC Task Management"
+    },
+    {
+      "name": "framework",
+      "value": "cucumberjs"
+    },
+    {
+      "name": "language",
+      "value": "javascript"
+    },
+    {
+      "name": "tag",
+      "value": "@smoke"
+    },
+    {
+      "name": "issue",
+      "value": "DEFECT-123"
+    }
+  ],
+  "start": 1775399520000,
+  "stop": 1775399526400
+}

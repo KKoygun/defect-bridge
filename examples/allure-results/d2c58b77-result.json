@@ -1,0 +1,31 @@
+{
+  "stage": "finished",
+  "steps": [],
+  "parameters": [],
+  "links": [],
+  "attachments": [],
+  "uuid": "d2c58b77-2e4f-4d1a-b6c8-9a0e3f5d7b62",
+  "historyId": "7a3c9e1f5b2d8064",
+  "name": "Filter active todos",
+  "fullName": "TodoMVC Task Management > Filter active todos",
+  "status": "failed",
+  "statusDetails": {
+    "message": "expect(locator).toHaveCount(expected) failed"
+  },
+  "labels": [
+    {
+      "name": "feature",
+      "value": "TodoMVC Task Management"
+    },
+    {
+      "name": "framework",
+      "value": "cucumberjs"
+    },
+    {
+      "name": "language",
+      "value": "javascript"
+    }
+  ],
+  "start": 1775399550000,
+  "stop": 1775399553000
+}

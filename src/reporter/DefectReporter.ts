@@ -2,14 +2,16 @@ import * as fs from 'fs';
 import { AllureResultsParser } from '../allure/AllureResultsParser';
 import { JiraClient } from '../jira/JiraClient';
 import { CommentBuilder } from '../jira/CommentBuilder';
+import { adfToText } from '../jira/adfToText';
 import { GitHubClient } from '../github/GitHubClient';
 import { GitHubCommentBuilder } from '../github/GitHubCommentBuilder';
 import { ParsedFailure } from '../allure/types';
-import { config } from '../config';
+import { Config } from '../config';
 
-export interface DefectReporterOptions {
-  /** When true, log what would be posted without making any API calls. */
-  dryRun?: boolean;
+export interface ReportSummary {
+  reported: number;
+  skipped: number;
+  errored: number;
 }
 
 /**
@@ -20,7 +22,7 @@ export interface DefectReporterOptions {
  *   2. Report to Jira (if configured) — verify ticket, post ADF comment, attach screenshot
  *   3. Report to GitHub Issues (if configured) — verify issue, post Markdown comment
  *
- * Pass { dryRun: true } to preview what would be posted without any API calls.
+ * In a dry run nothing is called: the comment for every tagged failure is printed instead.
  */
 export class DefectReporter {
   private readonly parser: AllureResultsParser;
@@ -28,32 +30,27 @@ export class DefectReporter {
 
   // Jira
   private readonly jira?: JiraClient;
-  private readonly commentBuilder: CommentBuilder;
+  private readonly commentBuilder = new CommentBuilder();
 
   // GitHub
   private readonly github?: GitHubClient;
-  private readonly githubCommentBuilder: GitHubCommentBuilder;
+  private readonly githubCommentBuilder = new GitHubCommentBuilder();
 
-  constructor(options: DefectReporterOptions = {}) {
-    this.dryRun = options.dryRun ?? false;
+  constructor(private readonly config: Config) {
+    this.dryRun = config.run.dryRun;
     this.parser = new AllureResultsParser(config.allure.resultsDir);
-    this.commentBuilder = new CommentBuilder();
-    this.githubCommentBuilder = new GitHubCommentBuilder();
 
-    if (config.jira) {
-      this.jira = new JiraClient(
-        config.jira.baseUrl,
-        config.jira.email,
-        config.jira.apiToken
-      );
+    if (config.jira && !this.dryRun) {
+      this.jira = new JiraClient(config.jira.baseUrl, config.jira.email, config.jira.apiToken);
     }
 
-    if (config.github) {
+    if (config.github && !this.dryRun) {
       this.github = new GitHubClient(config.github.token, config.github.repo);
     }
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<ReportSummary> {
+    const { config } = this;
     const dryTag = this.dryRun ? ' [DRY RUN]' : '';
 
     console.log(`\n── defect-bridge${dryTag} ────────────────────────────────`);
@@ -62,100 +59,74 @@ export class DefectReporter {
     if (config.github) console.log(`GitHub         : github.com/${config.github.repo}`);
     console.log(`Environment    : ${config.run.env}`);
     if (config.run.runId) console.log(`CI Run ID      : ${config.run.runId}`);
-    if (this.dryRun) console.log('\n⚠️  Dry-run mode — no API calls will be made.');
+    if (this.dryRun) console.log('\nDry run — nothing is sent. Each comment is printed instead.');
     console.log('──────────────────────────────────────────────────────\n');
 
     const failures = this.parser.parse();
+    const summary: ReportSummary = { reported: 0, skipped: 0, errored: 0 };
 
     if (failures.length === 0) {
       console.log('✅ No failures with @issue / @github_issue tags found. Nothing to report.');
-      return;
+      this.writeStepSummary(failures, summary);
+      return summary;
     }
 
-    let reported = 0;
-    let skipped  = 0;
-    let errored  = 0;
-
     for (const failure of failures) {
-      const jiraLabel  = failure.jiraTicket  ? `[${failure.jiraTicket}] `  : '';
-      const ghLabel    = failure.githubIssue ? `[GH#${failure.githubIssue}] ` : '';
+      const jiraLabel = failure.jiraTicket  ? `[${failure.jiraTicket}] `  : '';
+      const ghLabel   = failure.githubIssue ? `[GH#${failure.githubIssue}] ` : '';
       console.log(`\n${jiraLabel}${ghLabel}${failure.scenarioName}`);
+
+      if (this.dryRun) {
+        this.preview(failure, summary);
+        continue;
+      }
 
       // ── Jira ─────────────────────────────────────────────────────────────
       if (this.jira && failure.jiraTicket) {
-        if (this.dryRun) {
-          console.log(`  [DRY RUN] Would post ADF comment to Jira: ${failure.jiraTicket}`);
-          if (failure.screenshotPath) {
-            console.log(`  [DRY RUN] Would attach screenshot: ${failure.screenshotPath}`);
-          }
-          reported++;
-        } else {
-          try {
-            const issue = await this.jira.getIssue(failure.jiraTicket);
-            if (!issue) {
-              console.warn(`  ⚠️  Jira ticket not found: ${failure.jiraTicket} — skipping`);
-              skipped++;
-            } else {
-              console.log(`  Jira: ${issue.key} — ${issue.summary}`);
+        try {
+          const issue = await this.jira.getIssue(failure.jiraTicket);
+          if (!issue) {
+            console.warn(`  ⚠️  Jira ticket not found: ${failure.jiraTicket} — skipping`);
+            summary.skipped++;
+          } else {
+            console.log(`  Jira: ${issue.key} — ${issue.summary}`);
 
-              const commentBody = this.commentBuilder.build(
-                failure,
-                config.run.env,
-                config.run.runId
-              );
-              await this.jira.addComment(failure.jiraTicket, commentBody);
-              console.log(`  ✅ Jira comment posted`);
+            const commentBody = this.commentBuilder.build(failure, config.run.env, config.run.runId);
+            await this.jira.addComment(failure.jiraTicket, commentBody);
+            console.log(`  ✅ Jira comment posted`);
 
-              if (failure.screenshotPath) {
-                await this.jira.addAttachment(failure.jiraTicket, failure.screenshotPath);
-                console.log(`  📎 Screenshot attached to Jira`);
-              }
-
-              reported++;
+            if (failure.screenshotPath) {
+              await this.jira.addAttachment(failure.jiraTicket, failure.screenshotPath);
+              console.log(`  📎 Screenshot attached to Jira`);
             }
-          } catch (err) {
-            console.error(
-              `  ❌ Jira error: ${err instanceof Error ? err.message : err}`
-            );
-            errored++;
+
+            summary.reported++;
           }
+        } catch (err) {
+          console.error(`  ❌ Jira error: ${err instanceof Error ? err.message : err}`);
+          summary.errored++;
         }
       }
 
       // ── GitHub Issues ─────────────────────────────────────────────────────
       if (this.github && failure.githubIssue) {
-        if (this.dryRun) {
-          console.log(
-            `  [DRY RUN] Would post Markdown comment to GitHub Issue #${failure.githubIssue}`
-          );
-          reported++;
-        } else {
-          try {
-            const issue = await this.github.getIssue(failure.githubIssue);
-            if (!issue) {
-              console.warn(
-                `  ⚠️  GitHub Issue #${failure.githubIssue} not found in ${config.github!.repo} — skipping`
-              );
-              skipped++;
-            } else {
-              console.log(`  GitHub: #${issue.number} — ${issue.title}`);
+        try {
+          const issue = await this.github.getIssue(failure.githubIssue);
+          if (!issue) {
+            console.warn(`  ⚠️  GitHub Issue #${failure.githubIssue} not found in ${config.github!.repo} — skipping`);
+            summary.skipped++;
+          } else {
+            console.log(`  GitHub: #${issue.number} — ${issue.title}`);
 
-              const body = this.githubCommentBuilder.build(
-                failure,
-                config.run.env,
-                config.run.runId
-              );
-              await this.github.addComment(failure.githubIssue, body);
-              console.log(`  ✅ GitHub comment posted`);
+            const body = this.githubCommentBuilder.build(failure, config.run.env, config.run.runId);
+            await this.github.addComment(failure.githubIssue, body);
+            console.log(`  ✅ GitHub comment posted`);
 
-              reported++;
-            }
-          } catch (err) {
-            console.error(
-              `  ❌ GitHub error: ${err instanceof Error ? err.message : err}`
-            );
-            errored++;
+            summary.reported++;
           }
+        } catch (err) {
+          console.error(`  ❌ GitHub error: ${err instanceof Error ? err.message : err}`);
+          summary.errored++;
         }
       }
     }
@@ -163,14 +134,36 @@ export class DefectReporter {
     // ── Summary ───────────────────────────────────────────────────────────────
     console.log('\n──────────────────────────────────────────────────────');
     console.log(`defect-bridge summary${dryTag}`);
-    console.log(`  Reported : ${reported}`);
-    if (skipped) console.log(`  Skipped  : ${skipped} (issue not found)`);
-    if (errored) console.log(`  Errors   : ${errored}`);
+    console.log(`  ${this.dryRun ? 'Previewed' : 'Reported '} : ${summary.reported}`);
+    if (summary.skipped) console.log(`  Skipped   : ${summary.skipped} (issue not found)`);
+    if (summary.errored) console.log(`  Errors    : ${summary.errored}`);
     console.log('──────────────────────────────────────────────────────\n');
 
-    this.writeStepSummary(failures, reported, skipped, errored);
+    this.writeStepSummary(failures, summary);
+    return summary;
+  }
 
-    if (errored > 0) process.exit(1);
+  /** Prints the comment each destination would receive, whether or not it is configured. */
+  private preview(failure: ParsedFailure, summary: ReportSummary): void {
+    const { env, runId } = this.config.run;
+
+    if (failure.jiraTicket) {
+      const comment = this.commentBuilder.build(failure, env, runId) as { body: Parameters<typeof adfToText>[0] };
+      this.printBlock(`Jira comment for ${failure.jiraTicket}:`, adfToText(comment.body));
+      if (failure.screenshotPath) console.log(`  [DRY RUN] Would attach ${failure.screenshotPath}`);
+      summary.reported++;
+    }
+
+    if (failure.githubIssue) {
+      const body = this.githubCommentBuilder.build(failure, env, runId);
+      this.printBlock(`GitHub comment for #${failure.githubIssue}:`, body);
+      summary.reported++;
+    }
+  }
+
+  private printBlock(title: string, text: string): void {
+    console.log(`  [DRY RUN] ${title}`);
+    for (const line of text.split('\n')) console.log(`    │ ${line}`);
   }
 
   // ── GitHub Actions Job Summary ────────────────────────────────────────────
@@ -179,12 +172,7 @@ export class DefectReporter {
    * visible directly on the Actions run page — no artifact download required.
    * No-op when running outside GitHub Actions.
    */
-  private writeStepSummary(
-    failures: ParsedFailure[],
-    reported: number,
-    skipped: number,
-    errored: number
-  ): void {
+  private writeStepSummary(failures: ParsedFailure[], summary: ReportSummary): void {
     const summaryPath = process.env.GITHUB_STEP_SUMMARY;
     if (!summaryPath) return;
 
@@ -192,8 +180,8 @@ export class DefectReporter {
     const lines: string[] = [
       `## defect-bridge${dryTag}`,
       '',
-      `**Environment:** \`${config.run.env}\`  `,
-      `**Results dir:** \`${config.allure.resultsDir}\``,
+      `**Environment:** \`${this.config.run.env}\`  `,
+      `**Results dir:** \`${this.config.allure.resultsDir}\``,
       '',
     ];
 
@@ -204,14 +192,14 @@ export class DefectReporter {
       lines.push('|---|---|---|---|');
 
       for (const f of failures) {
-        const jira   = f.jiraTicket  ? `\`${f.jiraTicket}\``   : '—';
-        const gh     = f.githubIssue ? `#${f.githubIssue}`     : '—';
-        const status = errored > 0   ? '❌ error' : this.dryRun ? '🔍 dry run' : '✅ reported';
+        const jira   = f.jiraTicket  ? `\`${f.jiraTicket}\`` : '—';
+        const gh     = f.githubIssue ? `#${f.githubIssue}`   : '—';
+        const status = summary.errored > 0 ? '❌ error' : this.dryRun ? '🔍 dry run' : '✅ reported';
         lines.push(`| ${f.scenarioName} | ${jira} | ${gh} | ${status} |`);
       }
 
       lines.push('');
-      lines.push(`**Reported:** ${reported} &nbsp; **Skipped:** ${skipped} &nbsp; **Errors:** ${errored}`);
+      lines.push(`**Reported:** ${summary.reported} &nbsp; **Skipped:** ${summary.skipped} &nbsp; **Errors:** ${summary.errored}`);
     }
 
     lines.push('');

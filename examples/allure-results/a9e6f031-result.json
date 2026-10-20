@@ -1,0 +1,32 @@
+{
+  "stage": "finished",
+  "steps": [],
+  "parameters": [],
+  "links": [],
+  "attachments": [],
+  "uuid": "a9e6f031-7d2b-4b8a-8e5c-1f3a6b9d0e24",
+  "historyId": "0b7f2d9e8c1a4e55",
+  "name": "Complete a todo item",
+  "fullName": "TodoMVC Task Management > Complete a todo item",
+  "status": "passed",
+  "labels": [
+    {
+      "name": "feature",
+      "value": "TodoMVC Task Management"
+    },
+    {
+      "name": "framework",
+      "value": "cucumberjs"
+    },
+    {
+      "name": "language",
+      "value": "javascript"
+    },
+    {
+      "name": "issue",
+      "value": "DEFECT-123"
+    }
+  ],
+  "start": 1775399540000,
+  "stop": 1775399541200
+}
