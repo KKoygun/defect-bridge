@@ -1,0 +1,24 @@
+name: Action
+
+# Runs the composite action from this repo against the example results in dry-run
+# mode, so every push proves `uses: KKoygun/defect-bridge` still works. No secrets needed.
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  dry-run:
+    name: Action dry run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run defect-bridge on the example results
+        uses: ./
+        with:
+          allure-results: examples/allure-results
+          env: ci
+          dry-run: 'true'

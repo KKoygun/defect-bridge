@@ -1,0 +1,69 @@
+name: defect-bridge
+description: Post Allure test failures as comments on the Jira or GitHub issues they are tagged with
+branding:
+  icon: link
+  color: red
+
+inputs:
+  allure-results:
+    description: Path to the allure-results directory, relative to the workspace
+    default: allure-results
+  env:
+    description: Environment label shown in the comments
+    default: dev
+  dry-run:
+    description: Print the comments instead of posting them
+    default: 'false'
+  fail-on-report-error:
+    description: Fail the step when a ticket could not be updated (configuration errors always fail it)
+    default: 'false'
+  jira-flavor:
+    description: cloud or datacenter
+    default: cloud
+  jira-base-url:
+    description: Jira URL, e.g. https://acme.atlassian.net
+    default: ''
+  jira-email:
+    description: Jira Cloud account email
+    default: ''
+  jira-api-token:
+    description: Jira Cloud API token
+    default: ''
+  jira-pat:
+    description: Jira Data Center personal access token
+    default: ''
+  github-token:
+    description: Token that can comment on issues (e.g. secrets.GITHUB_TOKEN with issues write permission)
+    default: ''
+  github-repo:
+    description: owner/repo of the issues to comment on
+    default: ${{ github.repository }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install defect-bridge
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci --no-audit --no-fund
+
+    - name: Report failures
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        ALLURE_RESULTS_DIR: ${{ github.workspace }}/${{ inputs.allure-results }}
+        ENV: ${{ inputs.env }}
+        FAIL_ON_REPORT_ERROR: ${{ inputs.fail-on-report-error }}
+        JIRA_FLAVOR: ${{ inputs.jira-flavor }}
+        JIRA_BASE_URL: ${{ inputs.jira-base-url }}
+        JIRA_EMAIL: ${{ inputs.jira-email }}
+        JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
+        JIRA_PAT: ${{ inputs.jira-pat }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPO: ${{ inputs.github-repo }}
+      run: npx ts-node scripts/run.ts ${{ inputs.dry-run == 'true' && '--dry-run' || '' }}
