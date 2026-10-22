@@ -2,6 +2,9 @@
   "name": "defect-bridge",
   "version": "1.0.0",
   "description": "Posts Allure test failures as comments on the Jira (Cloud or Data Center) or GitHub issues they are tagged with",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "report": "ts-node scripts/run.ts",
     "example": "ts-node scripts/run.ts --dry-run --results-dir=examples/allure-results",
