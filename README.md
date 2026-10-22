@@ -337,6 +337,14 @@ npm run typecheck
 
 Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, and the CLI exit codes. Nothing calls a real tracker.
 
+What each destination has been checked against:
+
+| Destination | Checked against |
+|---|---|
+| Jira Cloud | Local fake server (unit tests) |
+| Jira Data Center | Local fake server (unit tests) — API v2 and wiki markup as documented by Atlassian |
+| GitHub Issues | Local fake server (unit tests) |
+
 ---
 
 ## Security
