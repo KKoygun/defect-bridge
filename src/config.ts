@@ -50,6 +50,14 @@ const ConfigSchema = z
       resultsDir: z.string().min(1),
     }),
 
+    // Optional status changes; without them defect-bridge only comments
+    lifecycle: z.object({
+      /** Transition (or target status) to use when a test fails on a ticket that is already done, e.g. "Reopen". */
+      reopenTransition: z.string().optional(),
+      /** Transition (or target status) to use when a test passes on an open ticket, e.g. "Ready for QA". */
+      passTransition: z.string().optional(),
+    }),
+
     run: z.object({
       env:    z.string().min(1),
       runId:  z.string().optional(),
@@ -94,6 +102,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cli: CliOptions
 
     allure: {
       resultsDir: cli.resultsDir ?? env.ALLURE_RESULTS_DIR ?? 'allure-results',
+    },
+
+    lifecycle: {
+      reopenTransition: env.JIRA_REOPEN_TRANSITION || undefined,
+      passTransition: env.JIRA_PASS_TRANSITION || undefined,
     },
 
     run: {

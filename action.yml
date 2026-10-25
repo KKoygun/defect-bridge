@@ -32,6 +32,12 @@ inputs:
   jira-pat:
     description: Jira Data Center personal access token
     default: ''
+  jira-reopen-transition:
+    description: Transition or status to apply when a test fails on a done ticket, e.g. Reopen. Empty means comment only
+    default: ''
+  jira-pass-transition:
+    description: Transition or status to apply when a test passes on an open ticket, e.g. Ready for QA. Empty means comment only
+    default: ''
   github-token:
     description: Token that can comment on issues (e.g. secrets.GITHUB_TOKEN with issues write permission)
     default: ''
@@ -64,6 +70,8 @@ runs:
         JIRA_EMAIL: ${{ inputs.jira-email }}
         JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
         JIRA_PAT: ${{ inputs.jira-pat }}
+        JIRA_REOPEN_TRANSITION: ${{ inputs.jira-reopen-transition }}
+        JIRA_PASS_TRANSITION: ${{ inputs.jira-pass-transition }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPO: ${{ inputs.github-repo }}
       run: npx ts-node scripts/run.ts ${{ inputs.dry-run == 'true' && '--dry-run' || '' }}

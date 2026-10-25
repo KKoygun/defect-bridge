@@ -9,16 +9,20 @@ import { ParsedFailure } from '../allure/types';
  * https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
  */
 export class CommentBuilder {
-  build(failure: ParsedFailure, env: string, runId?: string, marker?: string): object {
+  /** regressionOf: the ticket's status when it is already Done, e.g. "Done" or "Closed". */
+  build(failure: ParsedFailure, env: string, runId?: string, marker?: string, regressionOf?: string): object {
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
     const durationText = failure.duration !== undefined ? `${failure.duration}s` : 'N/A';
+    const title = regressionOf
+      ? `🔁 Regression — ticket is ${regressionOf}, but the test fails again`
+      : '🔴 Automated Test is Failing';
 
     return {
       body: {
         version: 1,
         type: 'doc',
         content: [
-          this.heading('🔴 Automated Test is Failing'),
+          this.heading(title),
           this.divider(),
           this.infoTable(failure, timestamp, env, durationText, runId),
           this.divider(),
@@ -30,6 +34,30 @@ export class CommentBuilder {
           this.divider(),
           this.note('Screenshot attached to this comment if available.'),
           // Lets a re-run of the same CI run find this comment and skip it
+          ...(marker ? [this.marker(marker)] : []),
+        ],
+      },
+    };
+  }
+
+  /** Posted once when a test linked to an open ticket starts passing. */
+  buildPassing(result: ParsedFailure, env: string, runId?: string, marker?: string): object {
+    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    const durationText = result.duration !== undefined ? `${result.duration}s` : 'N/A';
+
+    return {
+      body: {
+        version: 1,
+        type: 'doc',
+        content: [
+          this.heading('🟢 Automated test is passing again'),
+          this.divider(),
+          this.infoTable(result, timestamp, env, durationText, runId),
+          this.divider(),
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'The test linked to this ticket passed. If nothing else is pending, the fix can be verified and the ticket closed.' }],
+          },
           ...(marker ? [this.marker(marker)] : []),
         ],
       },

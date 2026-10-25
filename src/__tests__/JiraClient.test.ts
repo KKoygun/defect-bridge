@@ -39,13 +39,26 @@ function tempScreenshot(): string {
 }
 
 describe('JiraCloudClient (API v3)', () => {
-  it('returns the ticket key and summary, using basic auth', async () => {
-    const jira = await cloudWith(() => ({ status: 200, body: { key: 'PROJ-42', fields: { summary: 'Checkout fails' } } }));
+  it('returns the ticket with its status, priority and assignee, using basic auth', async () => {
+    const fields = {
+      summary: 'Checkout fails',
+      status: { name: 'In Review', statusCategory: { key: 'indeterminate' } },
+      priority: { name: 'High' },
+      assignee: { displayName: 'Ada Tester' },
+    };
+    const jira = await cloudWith(() => ({ status: 200, body: { key: 'PROJ-42', fields } }));
 
-    expect(await jira.getIssue('PROJ-42')).toEqual({ key: 'PROJ-42', summary: 'Checkout fails' });
+    expect(await jira.getIssue('PROJ-42')).toEqual({
+      key: 'PROJ-42',
+      summary: 'Checkout fails',
+      status: 'In Review',
+      statusCategory: 'indeterminate',
+      priority: 'High',
+      assignee: 'Ada Tester',
+    });
 
     const expectedAuth = `Basic ${Buffer.from('qa@example.com:token-123').toString('base64')}`;
-    expect(server!.requests[0].url).toBe('/rest/api/3/issue/PROJ-42?fields=summary');
+    expect(server!.requests[0].url).toBe('/rest/api/3/issue/PROJ-42?fields=summary,status,priority,assignee');
     expect(server!.requests[0].headers.authorization).toBe(expectedAuth);
   });
 
@@ -80,6 +93,42 @@ describe('JiraCloudClient (API v3)', () => {
     expect(server!.requests[0].url).toBe('/rest/api/3/issue/PROJ-42/comment?maxResults=100&orderBy=-created');
   });
 
+  it('reads the last reported state of a test from the newest marker', async () => {
+    const comment = (text: string) => ({ body: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] } });
+    let comments = [comment('defect-bridge:passing;run=148;test=h1'), comment('defect-bridge:run=147;test=h1')];
+    const jira = await cloudWith(() => ({ status: 200, body: { comments } }));
+
+    expect(await jira.lastReportedState('PROJ-42', 'h1')).toBe('passing');
+    comments = [comment('defect-bridge:run=149;test=h1'), ...comments];
+    expect(await jira.lastReportedState('PROJ-42', 'h1')).toBe('failing');
+    // h1 must not match h10
+    comments = [comment('defect-bridge:run=150;test=h10')];
+    expect(await jira.lastReportedState('PROJ-42', 'h1')).toBeUndefined();
+  });
+
+  it('posts the passing comment with its marker', async () => {
+    const jira = await cloudWith(() => ({ status: 201, body: { id: '10002' } }));
+
+    await jira.addPassingComment('PROJ-42', failure, { ...ctx, marker: 'defect-bridge:passing;run=147;test=h1' });
+
+    expect(server!.requests[0].body).toContain('passing again');
+    expect(server!.requests[0].body).toContain('defect-bridge:passing;run=147;test=h1');
+  });
+
+  it('moves the ticket by transition name or target status, and returns null when neither exists', async () => {
+    const transitions = [{ id: '31', name: 'Reopen', to: { name: 'To Do' } }];
+    const jira = await cloudWith((req) => (req.method === 'GET' ? { status: 200, body: { transitions } } : { status: 204 }));
+
+    expect(await jira.transition('PROJ-42', 'reopen')).toBe('To Do');
+    expect(await jira.transition('PROJ-42', 'To Do')).toBe('To Do');
+    expect(await jira.transition('PROJ-42', 'Close')).toBeNull();
+
+    const posts = server!.requests.filter((r) => r.method === 'POST');
+    expect(posts).toHaveLength(2);
+    expect(posts[0].url).toBe('/rest/api/3/issue/PROJ-42/transitions');
+    expect(JSON.parse(posts[0].body)).toEqual({ transition: { id: '31' } });
+  });
+
   it('uploads an attachment as multipart with the no-check header', async () => {
     const jira = await cloudWith(() => ({ status: 200, body: [{ id: '1' }] }));
 
@@ -100,7 +149,7 @@ describe('JiraDataCenterClient (API v2)', () => {
 
     await jira.getIssue('PROJ-42');
 
-    expect(server!.requests[0].url).toBe('/rest/api/2/issue/PROJ-42?fields=summary');
+    expect(server!.requests[0].url).toBe('/rest/api/2/issue/PROJ-42?fields=summary,status,priority,assignee');
     expect(server!.requests[0].headers.authorization).toBe('Bearer pat-456');
   });
 
@@ -116,6 +165,17 @@ describe('JiraDataCenterClient (API v2)', () => {
     expect(body).toContain('*Scenario:* Add a todo item');
     expect(body).toContain(`{{${ctx.marker}}}`);
     expect(body).not.toMatch(/\p{Extended_Pictographic}/u);
+  });
+
+  it('posts regression and passing comments in wiki markup', async () => {
+    const jira = await dataCenterWith(() => ({ status: 201, body: { id: '20002' } }));
+
+    await jira.addComment('PROJ-42', failure, { ...ctx, regressionOf: 'Closed' });
+    await jira.addPassingComment('PROJ-42', failure, ctx);
+
+    const [regression, passing] = server!.requests.map((r) => (JSON.parse(r.body) as { body: string }).body);
+    expect(regression).toContain('h3. (!) Regression — ticket is Closed, but the test fails again');
+    expect(passing).toContain('h3. (/) Automated test is passing again');
   });
 
   it('finds an earlier comment by its marker in a wiki body', async () => {

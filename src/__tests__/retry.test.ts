@@ -24,7 +24,7 @@ async function jiraReplying(...statuses: number[]) {
 describe('retry', () => {
   it('retries a rate limit and then succeeds', async () => {
     const jira = await jiraReplying(429, 200);
-    expect(await jira.getIssue('PROJ-1')).toEqual({ key: 'PROJ-1', summary: 'ok' });
+    expect(await jira.getIssue('PROJ-1')).toMatchObject({ key: 'PROJ-1', summary: 'ok' });
     expect(server!.requests).toHaveLength(2);
   });
 

@@ -8,10 +8,12 @@ import { ParsedFailure } from '../allure/types';
  * (x) is Jira's own red-cross icon.
  */
 export class WikiCommentBuilder {
-  build(failure: ParsedFailure, env: string, runId?: string, marker?: string): string {
+  build(failure: ParsedFailure, env: string, runId?: string, marker?: string, regressionOf?: string): string {
     const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
     const lines = [
-      'h3. (x) Automated Test is Failing',
+      regressionOf
+        ? `h3. (!) Regression — ticket is ${regressionOf}, but the test fails again`
+        : 'h3. (x) Automated Test is Failing',
       '----',
       `*Scenario:* ${failure.scenarioName}`,
       `*Feature:* ${failure.fullName ?? 'N/A'}`,
@@ -31,6 +33,22 @@ export class WikiCommentBuilder {
       ...(marker ? [`{{${marker}}}`] : []),
     ];
     return lines.join('\n');
+  }
+
+  /** Posted once when a test linked to an open ticket starts passing. (/) is Jira's green tick. */
+  buildPassing(result: ParsedFailure, env: string, runId?: string, marker?: string): string {
+    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+    return [
+      'h3. (/) Automated test is passing again',
+      '----',
+      `*Scenario:* ${result.scenarioName}`,
+      `*Environment:* ${env}`,
+      `*Timestamp:* ${timestamp}`,
+      ...(runId ? [`*CI Run:* ${runId}`] : []),
+      '----',
+      'The test linked to this ticket passed. If nothing else is pending, the fix can be verified and the ticket closed.',
+      ...(marker ? [`{{${marker}}}`] : []),
+    ].join('\n');
   }
 }
 

@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { AllureResult, ParsedFailure } from './types';
+import { AllureResult, ParsedResult } from './types';
 
 /**
- * AllureResultsParser — reads allure-results/*.json and extracts failed
+ * AllureResultsParser — reads allure-results/*.json and extracts failing and passing
  * scenarios that carry a Jira or GitHub issue label.
  *
  * Allure result files are generated per-test by:
@@ -15,7 +15,7 @@ import { AllureResult, ParsedFailure } from './types';
 export class AllureResultsParser {
   constructor(private readonly resultsDir: string) {}
 
-  parse(): ParsedFailure[] {
+  parse(): ParsedResult[] {
     if (!fs.existsSync(this.resultsDir)) {
       throw new Error(`allure-results directory not found: ${this.resultsDir}`);
     }
@@ -31,15 +31,16 @@ export class AllureResultsParser {
 
     console.log(`[Parser] Found ${resultFiles.length} result file(s)`);
 
-    const failures: ParsedFailure[] = [];
+    // Keyed by test id: when Allure records retries, only the last attempt counts
+    const latest = new Map<string, ParsedResult>();
 
     for (const file of resultFiles) {
       const filePath = path.join(this.resultsDir, file);
       const result = this.readResult(filePath);
       if (!result) continue;
 
-      // Only process failed or broken tests
-      if (result.status !== 'failed' && result.status !== 'broken') continue;
+      // Passing tests matter too: a known defect whose test passes again may be fixed
+      if (result.status !== 'failed' && result.status !== 'broken' && result.status !== 'passed') continue;
 
       // Resolve Jira ticket key — checks two sources in order:
       //   1. links[]  type:'issue'  → explicit URL, works without allure.properties
@@ -64,9 +65,16 @@ export class AllureResultsParser {
           ? Math.round((result.stop - result.start) / 1000)
           : undefined;
 
-      failures.push({
+      const testId = result.historyId ?? result.uuid;
+      const previous = latest.get(testId);
+      if (previous && (previous.stop ?? 0) > (result.stop ?? 0)) continue;
+
+      latest.set(testId, {
         uuid: result.uuid,
-        testId: result.historyId ?? result.uuid,
+        testId,
+        status: result.status,
+        file: filePath,
+        stop: result.stop,
         scenarioName: result.name,
         fullName: result.fullName,
         errorMessage: result.statusDetails?.message ?? 'No error message captured',
@@ -78,8 +86,10 @@ export class AllureResultsParser {
       });
     }
 
-    console.log(`[Parser] ${failures.length} failure(s) linked to Jira/GitHub issues`);
-    return failures;
+    const results = [...latest.values()];
+    const failing = results.filter((r) => r.status !== 'passed').length;
+    console.log(`[Parser] ${results.length} tagged result(s): ${failing} failing, ${results.length - failing} passing`);
+    return results;
   }
 
   // ── Private ─────────────────────────────────────────────────────────────

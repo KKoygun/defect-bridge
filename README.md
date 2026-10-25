@@ -17,6 +17,9 @@ The result:
   making the failure context and tracking status clear at a glance
 - **Defect tickets stay current** — each run appends to the ticket history
   without manual intervention
+- **The ticket status is checked too** — a failure on a ticket that is already
+  done is flagged as a regression, and a linked test that starts passing gets
+  one "passing again" comment ([details](#ticket-lifecycle))
 - **Leaner CI artifacts** — failure history lives in Jira, so allure-results
   artifact retention can be cut to the minimum needed for the current report
 
@@ -44,7 +47,7 @@ Use `@allure.label.github_issue=7` to link a GitHub issue instead (or as well).
 **4. The linked ticket receives a comment.** This is the real dry-run output for the results in [`examples/allure-results`](examples/allure-results) (`npm run example` with `ENV=staging CI_RUN_ID=147`):
 
 ```
-[DEFECT-123] Add a single todo item
+[DEFECT-123] Add a single todo item — failed
   [DRY RUN] Jira comment for DEFECT-123:
     │ 🔴 Automated Test is Failing
     │ ────────────────────────────────────────
@@ -67,7 +70,7 @@ Use `@allure.label.github_issue=7` to link a GitHub issue instead (or as well).
     │ defect-bridge:run=147;test=c1a8e2f7a9b14d3e
   [DRY RUN] Would attach examples\allure-results\3f1c2a10-attachment.png
 
-[GH#7] Clear all completed todos
+[GH#7] Clear all completed todos — broken
   [DRY RUN] GitHub comment for #7:
     │ ## 🔴 Automated Test Failure
     │
@@ -102,13 +105,28 @@ Use `@allure.label.github_issue=7` to link a GitHub issue instead (or as well).
     │ _Posted automatically by **defect-bridge**_
     │ <!-- defect-bridge:run=147;test=5e93b0c4d2a7f611 -->
 
+[DEFECT-118] Complete a todo item — passed
+  [DRY RUN] Jira comment for DEFECT-118 (only if the ticket is still open):
+    │ 🟢 Automated test is passing again
+    │ ────────────────────────────────────────
+    │ Scenario     │ Complete a todo item
+    │ Feature      │ TodoMVC Task Management > Complete a todo item
+    │ Environment  │ staging
+    │ Duration     │ 1s
+    │ Timestamp    │ 2026-10-20 09:10:56 UTC
+    │ CI Run       │ 147
+    │ ────────────────────────────────────────
+    │ The test linked to this ticket passed. If nothing else is pending, the fix can be verified and the ticket closed.
+    │ defect-bridge:passing;run=147;test=0b7f2d9e8c1a4e55
+
 ──────────────────────────────────────────────────────
 defect-bridge summary [DRY RUN]
   Previewed : 2
+  Passing   : 1 (ticket still open)
 ──────────────────────────────────────────────────────
 ```
 
-The example folder also holds a passed test and an untagged failure; both are skipped. On Jira Cloud the comment is sent as Atlassian Document Format (shown above as text) and the screenshot is attached to the ticket.
+The example folder also holds an untagged failure, which is skipped. A dry run cannot see the ticket status, so it shows the passing comment as it would look on an open ticket; if DEFECT-123 were already done, its comment would be titled as a regression instead. On Jira Cloud the comment is sent as Atlassian Document Format (shown above as text) and the screenshot is attached to the ticket.
 
 <details>
 <summary>The same Jira comment on Data Center (<code>JIRA_FLAVOR=datacenter</code>)</summary>
@@ -177,11 +195,28 @@ GitHub Issues (give the job `permissions: issues: write`):
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Other inputs: `dry-run`, `fail-on-report-error`, `github-repo` (defaults to the current repo). See [`action.yml`](action.yml). The [Action workflow](.github/workflows/action.yml) runs the action on the example results in dry-run mode on every push.
+Other inputs: `dry-run`, `fail-on-report-error`, `jira-reopen-transition`, `jira-pass-transition`, `github-repo` (defaults to the current repo). See [`action.yml`](action.yml). The [Action workflow](.github/workflows/action.yml) runs the action on the example results in dry-run mode on every push.
 
 ---
 
 ## Behaviour
+
+### Ticket lifecycle
+
+Before commenting, defect-bridge reads the Jira ticket's status. Workflows name their statuses differently, so the decision uses Jira's status category (To Do / In Progress / Done), which every workflow maps onto.
+
+| Test | Ticket | What happens |
+|---|---|---|
+| Fails | Open | Failure comment with screenshot |
+| Fails | Done | Regression comment — "ticket is Done, but the test fails again". Optionally moved with `JIRA_REOPEN_TRANSITION` |
+| Passes | Open | One "passing again" comment. Optionally moved with `JIRA_PASS_TRANSITION` |
+| Passes | Done | Nothing |
+
+The "passing again" comment is posted once, not on every green run: defect-bridge checks the newest marker for that test on the ticket and posts only if the last thing it reported was a failure (or nothing yet). If the test fails and passes again later, it is reported again.
+
+Status changes are off by default; without the two settings defect-bridge only comments. Each setting takes a transition name (`Reopen`) or the status it leads to (`To Do`), matched case-insensitively. If the ticket's workflow has no such transition, a warning is logged and the status is left as it is.
+
+GitHub Issues only receives failure comments.
 
 **Retries** — rate limits (429), server errors (5xx) and dropped connections are retried with exponential backoff (1s, 2s, 4s), honouring `Retry-After`. Other errors (400, 401, 403) fail at once.
 
@@ -206,7 +241,7 @@ A Jira outage should not turn a red test run into a confusing pipeline failure; 
 ```
 src/
 ├── allure/
-│   ├── AllureResultsParser.ts   # Reads result JSONs, extracts failures with @issue tags
+│   ├── AllureResultsParser.ts   # Reads result JSONs, extracts tagged results (latest attempt per test)
 │   └── types.ts                 # Allure result type definitions
 ├── jira/
 │   ├── JiraClient.ts            # JiraClient interface + Cloud (API v3) and Data Center (API v2) clients
@@ -219,7 +254,7 @@ src/
 ├── http/
 │   └── retry.ts                 # Backoff for 429 / 5xx / dropped connections
 ├── reporter/
-│   └── DefectReporter.ts        # Orchestrates: parse → verify → dedupe → comment → attach → summarise
+│   └── DefectReporter.ts        # Orchestrates: parse → read status → dedupe → comment → attach → transition → summarise
 ├── config.ts                    # Reads and validates environment variables (Zod)
 └── __tests__/                   # Vitest unit tests; HTTP tests use a local fake server
 
@@ -274,6 +309,8 @@ cp .env.example .env
 | `ENV` | | Label shown in comments, default `dev` |
 | `CI_RUN_ID` | | Falls back to `GITHUB_RUN_NUMBER`; enables the duplicate check |
 | `FAIL_ON_REPORT_ERROR` | | `true` to exit 1 when a ticket could not be updated |
+| `JIRA_REOPEN_TRANSITION` | | Transition or status for a failure on a done ticket, e.g. `Reopen`. Off by default |
+| `JIRA_PASS_TRANSITION` | | Transition or status for a pass on an open ticket, e.g. `Ready for QA`. Off by default |
 
 Settings are validated at start-up and a wrong one is named in the error, e.g. `jira.email: JIRA_EMAIL must be a valid email address`.
 
@@ -320,11 +357,13 @@ Scenario: Checkout fails on payment step
 
 | Scenario state | Tagged | Action |
 |---|---|---|
-| Failed / Broken | Yes | Comment posted to the ticket |
+| Failed / Broken | Yes | Failure comment, or a regression comment if the Jira ticket is done |
 | Failed / Broken | No | Skipped — no tracker interaction |
-| Passed | Yes | Skipped — only failures are reported |
+| Passed | Yes | Jira: one "passing again" comment while the ticket is open. GitHub: skipped |
 | Any | Ticket not found | Warning logged, skipped |
 | Any | Already commented in this CI run | Skipped as a duplicate |
+
+A retried test counts once, by its last attempt: a test that fails and then passes on retry is treated as passed.
 
 ---
 
@@ -335,7 +374,7 @@ npm run test:unit
 npm run typecheck
 ```
 
-Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, and the CLI exit codes. Nothing calls a real tracker.
+Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, the ticket lifecycle against a fake Jira that keeps status and comments between runs (regression, reopen, passing once, transition missing), and the CLI exit codes. Nothing calls a real tracker.
 
 What each destination has been checked against:
 

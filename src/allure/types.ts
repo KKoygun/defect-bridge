@@ -56,3 +56,11 @@ export interface ParsedFailure {
   screenshotPath?: string;
   duration?: number;
 }
+
+/** A tagged test from allure-results, failing or passing. */
+export interface ParsedResult extends ParsedFailure {
+  status: 'failed' | 'broken' | 'passed';
+  /** The result file it came from. */
+  file: string;
+  stop?: number;
+}

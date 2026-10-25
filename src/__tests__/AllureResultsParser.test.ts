@@ -54,11 +54,23 @@ describe('AllureResultsParser', () => {
     expect(failures[0].githubIssue).toBe(42);
   });
 
-  it('skips passed tests even when they carry an issue label', () => {
+  it('returns passed tests that carry an issue label', () => {
     mockFs.readdirSync.mockReturnValue(['abc-result.json'] as unknown as ReturnType<typeof fs.readdirSync>);
     mockFs.readFileSync.mockReturnValue(makeResult({ status: 'passed' }));
     const parser = new AllureResultsParser('allure-results');
-    expect(parser.parse()).toHaveLength(0);
+    expect(parser.parse()).toMatchObject([{ status: 'passed', jiraTicket: 'PROJ-99' }]);
+  });
+
+  it('keeps only the latest attempt of a retried test', () => {
+    mockFs.readdirSync.mockReturnValue(['a-result.json', 'b-result.json'] as unknown as ReturnType<typeof fs.readdirSync>);
+    mockFs.readFileSync.mockImplementation((file) =>
+      String(file).includes('a-result')
+        ? makeResult({ uuid: 'retry', historyId: 'h1', status: 'passed', start: 5000, stop: 6000 })
+        : makeResult({ uuid: 'first', historyId: 'h1', status: 'failed', start: 1000, stop: 4000 })
+    );
+    const results = new AllureResultsParser('allure-results').parse();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ uuid: 'retry', status: 'passed' });
   });
 
   it('skips skipped tests', () => {
