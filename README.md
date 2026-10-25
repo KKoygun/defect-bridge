@@ -408,7 +408,7 @@ What each destination has been checked against:
 
 | Destination | Checked against |
 |---|---|
-| Jira Cloud | Local fake server (unit tests) |
+| Jira Cloud | Local fake server (unit tests), and a live Jira Cloud site on 2026-10-25 (team-managed Kanban project): regression comment + reopen, "passing again" comment + move to In Review, failure comment with screenshot, duplicate skip on a re-run, and the Allure categories from the same run |
 | Jira Data Center | Local fake server (unit tests) — API v2 and wiki markup as documented by Atlassian |
 | GitHub Issues | Local fake server (unit tests) |
 
