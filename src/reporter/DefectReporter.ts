@@ -8,8 +8,9 @@ import {
   previewComment,
   previewPassingComment,
 } from '../jira/JiraClient';
-import { GitHubClient } from '../github/GitHubClient';
+import { GitHubClient, GitHubIssue } from '../github/GitHubClient';
 import { GitHubCommentBuilder } from '../github/GitHubCommentBuilder';
+import { labelFailure, writeCategories } from '../allure/AllureCategories';
 import { ParsedResult } from '../allure/types';
 import { RetryOptions } from '../http/retry';
 import { Config } from '../config';
@@ -31,6 +32,7 @@ export interface ReportSummary {
 export interface Outcome {
   result: ParsedResult;
   jiraIssue?: JiraIssue;
+  githubIssue?: GitHubIssue;
   action: string;
 }
 
@@ -46,7 +48,9 @@ export interface Outcome {
  *   GitHub Issues: failure comment, as before.
  *
  * Comments carry a marker (CI run id + test id), so re-running the same CI run
- * does not post twice. In a dry run nothing is called; the comments are printed.
+ * does not post twice. Afterwards tagged failures are labelled for the Allure
+ * report's Categories tab. In a dry run nothing is called or written; the
+ * comments are printed.
  */
 export class DefectReporter {
   private readonly parser: AllureResultsParser;
@@ -95,6 +99,7 @@ export class DefectReporter {
 
     if (results.length === 0) {
       console.log('✅ No tests with @issue / @github_issue tags found. Nothing to report.');
+      this.writeAllureCategories(outcomes);
       this.writeStepSummary(outcomes, summary);
       return summary;
     }
@@ -118,7 +123,7 @@ export class DefectReporter {
 
       // GitHub Issues only gets failure comments
       if (this.github && result.githubIssue && result.status !== 'passed') {
-        await this.reportToGitHub(this.github, result, summary);
+        await this.reportToGitHub(this.github, result, outcome, summary);
       }
 
       outcomes.push(outcome);
@@ -135,6 +140,7 @@ export class DefectReporter {
     if (summary.errored)     console.log(`  Errors    : ${summary.errored}`);
     console.log('──────────────────────────────────────────────────────\n');
 
+    this.writeAllureCategories(outcomes);
     this.writeStepSummary(outcomes, summary);
     return summary;
   }
@@ -221,11 +227,12 @@ export class DefectReporter {
     }
   }
 
-  private async reportToGitHub(github: GitHubClient, result: ParsedResult, summary: ReportSummary): Promise<void> {
+  private async reportToGitHub(github: GitHubClient, result: ParsedResult, outcome: Outcome, summary: ReportSummary): Promise<void> {
     const { config } = this;
     const marker = this.markerFor(result);
     try {
       const issue = await github.getIssue(result.githubIssue!);
+      if (issue) outcome.githubIssue = issue;
       if (!issue) {
         console.warn(`  ⚠️  GitHub Issue #${result.githubIssue} not found in ${config.github!.repo} — skipping`);
         summary.skipped++;
@@ -242,6 +249,33 @@ export class DefectReporter {
     } catch (err) {
       console.error(`  ❌ GitHub error: ${err instanceof Error ? err.message : err}`);
       summary.errored++;
+    }
+  }
+
+  /**
+   * Labels each tagged failure as a known defect or a regression, using the
+   * ticket status read above (Jira first, then GitHub). When neither could be
+   * read the tag still says a defect is linked, so it is a known defect without
+   * a status. Untagged failures are left alone and fall under "New failure".
+   */
+  private writeAllureCategories(outcomes: Outcome[]): void {
+    if (this.dryRun || !this.config.allure.categories) return;
+
+    try {
+      writeCategories(this.config.allure.resultsDir);
+      for (const { result, jiraIssue, githubIssue } of outcomes) {
+        if (result.status === 'passed') continue;
+        if (jiraIssue) {
+          labelFailure(result.file, jiraIssue.statusCategory === 'done' ? 'regression' : 'known', jiraIssue.key, jiraIssue.status);
+        } else if (githubIssue) {
+          labelFailure(result.file, githubIssue.state === 'closed' ? 'regression' : 'known', `#${githubIssue.number}`, githubIssue.state);
+        } else {
+          labelFailure(result.file, 'known', result.jiraTicket ?? `#${result.githubIssue}`);
+        }
+      }
+      console.log('🗂️  Allure categories written (known defect / regression / new failure)');
+    } catch (err) {
+      console.warn(`⚠️  Could not write Allure categories: ${err instanceof Error ? err.message : err}`);
     }
   }
 

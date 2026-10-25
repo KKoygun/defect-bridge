@@ -14,6 +14,9 @@ inputs:
   dry-run:
     description: Print the comments instead of posting them
     default: 'false'
+  allure-categories:
+    description: Write categories.json and label tagged failures as known defect / regression in the results. Run before allure generate
+    default: 'true'
   fail-on-report-error:
     description: Fail the step when a ticket could not be updated (configuration errors always fail it)
     default: 'false'
@@ -64,6 +67,7 @@ runs:
       env:
         ALLURE_RESULTS_DIR: ${{ github.workspace }}/${{ inputs.allure-results }}
         ENV: ${{ inputs.env }}
+        ALLURE_CATEGORIES: ${{ inputs.allure-categories }}
         FAIL_ON_REPORT_ERROR: ${{ inputs.fail-on-report-error }}
         JIRA_FLAVOR: ${{ inputs.jira-flavor }}
         JIRA_BASE_URL: ${{ inputs.jira-base-url }}

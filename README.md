@@ -195,7 +195,7 @@ GitHub Issues (give the job `permissions: issues: write`):
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-Other inputs: `dry-run`, `fail-on-report-error`, `jira-reopen-transition`, `jira-pass-transition`, `github-repo` (defaults to the current repo). See [`action.yml`](action.yml). The [Action workflow](.github/workflows/action.yml) runs the action on the example results in dry-run mode on every push.
+Other inputs: `dry-run`, `fail-on-report-error`, `allure-categories`, `jira-reopen-transition`, `jira-pass-transition`, `github-repo` (defaults to the current repo). See [`action.yml`](action.yml). The [Action workflow](.github/workflows/action.yml) runs the action on the example results in dry-run mode on every push.
 
 ---
 
@@ -217,6 +217,20 @@ The "passing again" comment is posted once, not on every green run: defect-bridg
 Status changes are off by default; without the two settings defect-bridge only comments. Each setting takes a transition name (`Reopen`) or the status it leads to (`To Do`), matched case-insensitively. If the ticket's workflow has no such transition, a warning is logged and the status is left as it is.
 
 GitHub Issues only receives failure comments.
+
+### Allure categories
+
+After reporting, defect-bridge writes `categories.json` into the results directory and prefixes the error message of each tagged failure, so the report's **Categories** tab answers "is this already tracked?":
+
+| Category | Contains | Message starts with |
+|---|---|---|
+| Regression (linked ticket is closed) | Tagged failures whose Jira ticket is done or GitHub issue is closed | `[Regression DEFECT-123 · Done]` |
+| Known defect | Tagged failures whose ticket is still open | `[Known defect DEFECT-123 · In Progress]` |
+| New failure (no defect linked) | Every untagged failure — the ones that need a look | (unchanged) |
+
+Run defect-bridge **before** `allure generate` so the report picks this up. Categories the project already has in `categories.json` are kept. Running again on the same results replaces the prefixes instead of stacking them, and the comments posted to Jira and GitHub always carry the original message. Checked with Allure 2.38: each failure lands in exactly one of the three categories. Set `ALLURE_CATEGORIES=false` to leave the results untouched; a dry run never writes them.
+
+### Retries, duplicates and exit codes
 
 **Retries** — rate limits (429), server errors (5xx) and dropped connections are retried with exponential backoff (1s, 2s, 4s), honouring `Retry-After`. Other errors (400, 401, 403) fail at once.
 
@@ -242,6 +256,7 @@ A Jira outage should not turn a red test run into a confusing pipeline failure; 
 src/
 ├── allure/
 │   ├── AllureResultsParser.ts   # Reads result JSONs, extracts tagged results (latest attempt per test)
+│   ├── AllureCategories.ts      # categories.json + message prefixes for the Categories tab
 │   └── types.ts                 # Allure result type definitions
 ├── jira/
 │   ├── JiraClient.ts            # JiraClient interface + Cloud (API v3) and Data Center (API v2) clients
@@ -254,7 +269,7 @@ src/
 ├── http/
 │   └── retry.ts                 # Backoff for 429 / 5xx / dropped connections
 ├── reporter/
-│   └── DefectReporter.ts        # Orchestrates: parse → read status → dedupe → comment → attach → transition → summarise
+│   └── DefectReporter.ts        # Orchestrates: parse → read status → dedupe → comment → attach → transition → categorise → summarise
 ├── config.ts                    # Reads and validates environment variables (Zod)
 └── __tests__/                   # Vitest unit tests; HTTP tests use a local fake server
 
@@ -306,6 +321,7 @@ cp .env.example .env
 | `GITHUB_TOKEN`, `GITHUB_REPO` | GitHub Issues | `GITHUB_REPO` as `owner/repo` |
 | `GITHUB_API_URL` | GitHub Enterprise Server | Set automatically inside GitHub Actions |
 | `ALLURE_RESULTS_DIR` | | Default `allure-results` |
+| `ALLURE_CATEGORIES` | | `false` to skip writing [Allure categories](#allure-categories) into the results |
 | `ENV` | | Label shown in comments, default `dev` |
 | `CI_RUN_ID` | | Falls back to `GITHUB_RUN_NUMBER`; enables the duplicate check |
 | `FAIL_ON_REPORT_ERROR` | | `true` to exit 1 when a ticket could not be updated |
@@ -374,7 +390,7 @@ npm run test:unit
 npm run typecheck
 ```
 
-Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, the ticket lifecycle against a fake Jira that keeps status and comments between runs (regression, reopen, passing once, transition missing), and the CLI exit codes. Nothing calls a real tracker.
+Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, the ticket lifecycle against a fake Jira that keeps status and comments between runs (regression, reopen, passing once, transition missing), the Allure category labels on a copy of the example results, and the CLI exit codes. Nothing calls a real tracker.
 
 What each destination has been checked against:
 

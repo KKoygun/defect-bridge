@@ -21,6 +21,8 @@ function runCli(args: string[], env: Record<string, string> = {}): Promise<{ cod
         GITHUB_RUN_NUMBER: '',
         FAIL_ON_REPORT_ERROR: '',
         GITHUB_STEP_SUMMARY: '',
+        // Keeps the example results unchanged
+        ALLURE_CATEGORIES: 'false',
         ...env,
       },
     });

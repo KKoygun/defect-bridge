@@ -48,6 +48,8 @@ const ConfigSchema = z
 
     allure: z.object({
       resultsDir: z.string().min(1),
+      /** Write categories.json and label tagged failures for the report's Categories tab. */
+      categories: z.boolean(),
     }),
 
     // Optional status changes; without them defect-bridge only comments
@@ -102,6 +104,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cli: CliOptions
 
     allure: {
       resultsDir: cli.resultsDir ?? env.ALLURE_RESULTS_DIR ?? 'allure-results',
+      categories: env.ALLURE_CATEGORIES !== 'false',
     },
 
     lifecycle: {

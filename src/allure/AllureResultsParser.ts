@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { stripCategoryPrefix } from './AllureCategories';
 import { AllureResult, ParsedResult } from './types';
 
 /**
@@ -77,7 +78,8 @@ export class AllureResultsParser {
         stop: result.stop,
         scenarioName: result.name,
         fullName: result.fullName,
-        errorMessage: result.statusDetails?.message ?? 'No error message captured',
+        // A results dir reported on before carries category prefixes in the message
+        errorMessage: stripCategoryPrefix(result.statusDetails?.message ?? '') || 'No error message captured',
         errorTrace: result.statusDetails?.trace,
         jiraTicket,
         githubIssue,

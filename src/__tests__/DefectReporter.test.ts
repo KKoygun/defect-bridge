@@ -1,10 +1,15 @@
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config';
 import { DefectReporter } from '../reporter/DefectReporter';
 import { RecordedRequest, Reply, startFakeServer } from './fakeServer';
 
-// examples/allure-results: DEFECT-123 fails, DEFECT-118 passes, GitHub #7 fails
+// examples/allure-results: DEFECT-123 fails, DEFECT-118 passes, GitHub #7 fails, one untagged failure.
+// Each test works on a copy, since a real run writes Allure categories into the results.
 const EXAMPLES = 'examples/allure-results';
+let resultsDir: string;
 
 let server: Awaited<ReturnType<typeof startFakeServer>> | undefined;
 
@@ -13,6 +18,8 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.stubEnv('GITHUB_STEP_SUMMARY', '');
+  resultsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'db-results-'));
+  fs.cpSync(EXAMPLES, resultsDir, { recursive: true });
 });
 
 afterEach(async () => {
@@ -20,6 +27,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   await server?.close();
   server = undefined;
+  fs.rmSync(resultsDir, { recursive: true, force: true });
 });
 
 interface FakeTicket {
@@ -106,11 +114,15 @@ function configFor(runId?: string, extra: Record<string, string> = {}) {
       ...(runId ? { CI_RUN_ID: runId } : {}),
       ...extra,
     },
-    { resultsDir: EXAMPLES }
+    { resultsDir }
   );
 }
 
 const text = (comment: unknown) => JSON.stringify(comment);
+
+/** Error message of a result file in the copied results dir, by its file name prefix. */
+const messageOf = (file: string) =>
+  JSON.parse(fs.readFileSync(path.join(resultsDir, `${file}-result.json`), 'utf-8')).statusDetails?.message as string;
 
 describe('DefectReporter', () => {
   describe('failing test, open ticket', () => {
@@ -218,6 +230,52 @@ describe('DefectReporter', () => {
 
       expect(summary.passing).toBe(0);
       expect(tickets['DEFECT-118'].comments).toHaveLength(0);
+    });
+  });
+
+  describe('Allure categories', () => {
+    it('labels tagged failures by ticket status and writes categories.json', async () => {
+      await startFakeTrackers({ 'DEFECT-123': 'done' });
+
+      await new DefectReporter(configFor('147')).run();
+
+      expect(messageOf('3f1c2a10')).toMatch(/^\[Regression DEFECT-123 · Done\] locator\.fill/);
+      expect(messageOf('8b4d7e22')).toMatch(/^\[Known defect #7 · open\] expect\(locator\)/);
+      expect(messageOf('d2c58b77')).not.toMatch(/^\[/); // untagged
+      const names = JSON.parse(fs.readFileSync(path.join(resultsDir, 'categories.json'), 'utf-8')).map((c: { name: string }) => c.name);
+      expect(names).toEqual(['Regression (linked ticket is closed)', 'Known defect', 'New failure (no defect linked)']);
+    });
+
+    it('replaces its own labels on a second run and keeps the comment text clean', async () => {
+      const { tickets } = await startFakeTrackers();
+
+      await new DefectReporter(configFor('147')).run();
+      await new DefectReporter(configFor('148')).run();
+
+      expect(messageOf('3f1c2a10')).toMatch(/^\[Known defect DEFECT-123 · In Progress\] locator\.fill/);
+      expect(text(tickets['DEFECT-123'].comments[0])).not.toContain('[Known defect');
+    });
+
+    it('keeps categories the project already defines', async () => {
+      await startFakeTrackers();
+      fs.writeFileSync(path.join(resultsDir, 'categories.json'), JSON.stringify([{ name: 'Timeouts', messageRegex: '.*Timeout.*' }]));
+
+      await new DefectReporter(configFor('147')).run();
+
+      const names = JSON.parse(fs.readFileSync(path.join(resultsDir, 'categories.json'), 'utf-8')).map((c: { name: string }) => c.name);
+      expect(names).toContain('Timeouts');
+      expect(names).toHaveLength(4);
+    });
+
+    it('writes nothing with ALLURE_CATEGORIES=false or in a dry run', async () => {
+      await startFakeTrackers();
+      const before = messageOf('3f1c2a10');
+
+      await new DefectReporter(configFor('147', { ALLURE_CATEGORIES: 'false' })).run();
+      await new DefectReporter({ ...configFor('148'), run: { ...configFor('148').run, dryRun: true } }).run();
+
+      expect(messageOf('3f1c2a10')).toBe(before);
+      expect(fs.existsSync(path.join(resultsDir, 'categories.json'))).toBe(false);
     });
   });
 

@@ -1,6 +1,12 @@
 import axios from 'axios';
 import { RetryOptions, withRetry } from '../http/retry';
 
+export interface GitHubIssue {
+  number: number;
+  title: string;
+  state: 'open' | 'closed';
+}
+
 /**
  * GitHubClient — thin REST API client for GitHub Issues.
  *
@@ -24,8 +30,8 @@ export class GitHubClient {
     };
   }
 
-  /** Verify the issue exists and return its number + title. */
-  async getIssue(issueNumber: number): Promise<{ number: number; title: string } | null> {
+  /** Verify the issue exists and return its number, title and state. */
+  async getIssue(issueNumber: number): Promise<GitHubIssue | null> {
     try {
       const response = await withRetry(
         () => axios.get(`${this.apiUrl}/repos/${this.repo}/issues/${issueNumber}`, { headers: this.headers }),
@@ -34,6 +40,7 @@ export class GitHubClient {
       return {
         number: response.data.number as number,
         title:  response.data.title  as string,
+        state:  response.data.state  as 'open' | 'closed',
       };
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.status === 404) return null;
