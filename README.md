@@ -7,7 +7,7 @@ When a test fails, the question everyone asks is whether it is already tracked.
 defect-bridge makes that answerable directly from the Allure report — no ticket
 searching, no manual updates.
 
-defect-bridge runs as the final CI step after each test execution. It reads
+defect-bridge runs in CI after each test execution, before the report is generated. It reads
 the Allure results, finds every failed scenario tagged with a defect key,
 and posts the full failure detail — error, stack trace, screenshot — as a
 timestamped comment on that ticket. Every run. Automatically.
@@ -42,7 +42,7 @@ Use `@allure.label.github_issue=7` to link a GitHub issue instead (or as well).
 
 **2. Run your tests.** Your Allure adapter generates result files in `allure-results/`.
 
-**3. Run defect-bridge** — `npm run report`, or the [GitHub Action](#use-it-as-a-github-action).
+**3. Run defect-bridge** — `npm run report`, or the [GitHub Action](#use-it-as-a-github-action). Run it before `allure generate`, so the report shows the [categories](#allure-categories) it adds.
 
 **4. The linked ticket receives a comment.** This is the real dry-run output for the results in [`examples/allure-results`](examples/allure-results) (`npm run example` with `ENV=staging CI_RUN_ID=147`):
 
@@ -166,8 +166,8 @@ Data Center gets wiki markup and no emoji, since older Data Center databases (My
 ## Use it as a GitHub Action
 
 ```yaml
-- name: Post failures to Jira
-  if: failure()
+- name: Sync test results with Jira
+  if: always()                          # green runs matter too: they post "passing again"
   uses: KKoygun/defect-bridge@master   # pin to a release tag once one exists
   with:
     allure-results: allure-results
@@ -175,6 +175,10 @@ Data Center gets wiki markup and no emoji, since older Data Center databases (My
     jira-base-url:  ${{ secrets.JIRA_BASE_URL }}
     jira-email:     ${{ secrets.JIRA_EMAIL }}
     jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
+
+- name: Generate Allure report          # after defect-bridge, so the categories are in it
+  if: always()
+  run: npx allure generate allure-results --clean -o allure-report
 ```
 
 Jira Data Center:
@@ -225,7 +229,7 @@ After reporting, defect-bridge writes `categories.json` into the results directo
 | Category | Contains | Message starts with |
 |---|---|---|
 | Regression (linked ticket is closed) | Tagged failures whose Jira ticket is done or GitHub issue is closed | `[Regression DEFECT-123 · Done]` |
-| Known defect | Tagged failures whose ticket is still open | `[Known defect DEFECT-123 · In Progress]` |
+| Known defect | Tagged failures whose ticket is still open, or whose status could not be read (ticket not found, tracker unreachable) | `[Known defect DEFECT-123 · In Progress]` |
 | New failure (no defect linked) | Every untagged failure — the ones that need a look | (unchanged) |
 
 Run defect-bridge **before** `allure generate` so the report picks this up. Categories the project already has in `categories.json` are kept. Running again on the same results replaces the prefixes instead of stacking them, and the comments posted to Jira and GitHub always carry the original message. Checked with Allure 2.38: each failure lands in exactly one of the three categories. Set `ALLURE_CATEGORIES=false` to leave the results untouched; a dry run never writes them.
@@ -234,7 +238,7 @@ Run defect-bridge **before** `allure generate` so the report picks this up. Cate
 
 **Retries** — rate limits (429), server errors (5xx) and dropped connections are retried with exponential backoff (1s, 2s, 4s), honouring `Retry-After`. Other errors (400, 401, 403) fail at once.
 
-**No duplicate comments** — each comment carries a marker made of the CI run id and the test's Allure `historyId`. Before posting, defect-bridge looks for that marker on the ticket, so re-running the same CI run does not comment twice. A new run comments again. Without a run id (`CI_RUN_ID` or `GITHUB_RUN_NUMBER`) the check is off.
+**No duplicate comments** — each comment carries a marker made of the CI run id and the test's Allure `historyId`. Before posting, defect-bridge looks for that marker on the ticket, so re-running the same CI run does not comment twice. A new run comments again. Without a run id (`CI_RUN_ID` or `GITHUB_RUN_NUMBER`) the marker has only the test id and the duplicate check is off; the "passing again" logic still works.
 
 **Exit codes**
 
@@ -398,7 +402,7 @@ npm run test:unit
 npm run typecheck
 ```
 
-Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, the job summary table, the ticket lifecycle against a fake Jira that keeps status and comments between runs (regression, reopen, passing once, transition missing), the Allure category labels on a copy of the example results, and the CLI exit codes. Nothing calls a real tracker.
+Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, the job summary table, the ticket lifecycle against a fake Jira that keeps status and comments between runs (regression, reopen, passing once, pass → fail → pass, transition missing), the Allure category labels on a copy of the example results, and the CLI exit codes. Nothing calls a real tracker.
 
 What each destination has been checked against:
 
@@ -415,7 +419,8 @@ What each destination has been checked against:
 - Store tokens in CI secrets — never in source code or committed `.env` files
 - The `.env` file is excluded from git via `.gitignore`
 - Rotate your API token periodically at [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens)
-- The token only needs **Comment** and **Attachment** permissions on the relevant Jira project (Data Center: **Browse**, **Add Comments**, **Create Attachments**)
+- The account only needs **Browse Projects**, **Add Comments** and **Create Attachments** on the relevant Jira project, plus **Transition Issues** if `JIRA_REOPEN_TRANSITION` or `JIRA_PASS_TRANSITION` is set
+- Status changes are off by default; a test run cannot reopen or move tickets unless you opt in
 
 ---
 

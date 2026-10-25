@@ -1,5 +1,5 @@
 name: defect-bridge
-description: Post Allure test failures as comments on the Jira or GitHub issues they are tagged with
+description: Keep Jira or GitHub issues in step with the Allure tests tagged with them - failures, regressions, passes
 branding:
   icon: link
   color: red

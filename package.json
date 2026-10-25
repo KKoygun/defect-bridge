@@ -1,7 +1,7 @@
 {
   "name": "defect-bridge",
   "version": "1.0.0",
-  "description": "Posts Allure test failures as comments on the Jira (Cloud or Data Center) or GitHub issues they are tagged with",
+  "description": "Keeps Jira (Cloud or Data Center) and GitHub issues in step with the Allure tests tagged with them: failure, regression and passing-again comments, plus Allure categories",
   "engines": {
     "node": ">=22"
   },
