@@ -2,6 +2,7 @@
 
 [![Test](https://github.com/KKoygun/defect-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/KKoygun/defect-bridge/actions/workflows/test.yml)
 [![Action](https://github.com/KKoygun/defect-bridge/actions/workflows/action.yml/badge.svg)](https://github.com/KKoygun/defect-bridge/actions/workflows/action.yml)
+[![Showcase report](https://github.com/KKoygun/defect-bridge/actions/workflows/pages.yml/badge.svg)](https://kkoygun.github.io/defect-bridge/)
 
 When a test fails, the question everyone asks is whether it is already tracked.
 defect-bridge makes that answerable directly from the Allure report — no ticket
@@ -24,6 +25,8 @@ The result:
   artifact retention can be cut to the minimum needed for the current report
 
 Works with **Jira Cloud**, **Jira Data Center** and **GitHub Issues**.
+
+**[Showcase Allure report](https://kkoygun.github.io/defect-bridge/)** — rebuilt on every push by running defect-bridge against a local stand-in for Jira and GitHub ([how](#showcase)). Open the **Categories** tab.
 
 ---
 
@@ -286,6 +289,7 @@ src/
 └── __tests__/                   # Vitest unit tests; HTTP tests use a local fake server
 
 scripts/run.ts                   # CLI entry point
+scripts/showcase.ts              # Real run against a local stand-in Jira/GitHub, for the Pages report
 action.yml                       # Composite GitHub Action
 examples/allure-results/         # Small fixture for npm run example
 allure.properties.example        # Copy to allure-results/ to enable clickable Jira links
@@ -367,7 +371,25 @@ npm run report -- --results-dir=../my-project/allure-results
 
 # Dry run on the bundled example results
 npm run example
+
+# Real run on the example results against a local stand-in Jira/GitHub, then the report
+npm run showcase
+npm run showcase:report
+npx allure open showcase/allure-report
 ```
+
+### Showcase
+
+`npm run showcase` copies `examples/allure-results` to `showcase/`, starts a small stand-in for the Jira and GitHub APIs on localhost and runs defect-bridge against it, so every path is exercised without credentials:
+
+| Ticket in the stand-in | Test | Result |
+|---|---|---|
+| DEFECT-123, Done | fails | Regression comment, reopened → **Regression** category |
+| GitHub #7, open | fails | Failure comment → **Known defect** category |
+| DEFECT-118, In Progress | passes | "Passing again" comment |
+| — | untagged failure | **New failure** category |
+
+The [Showcase report workflow](.github/workflows/pages.yml) does this on every push to `master` and publishes the [report](https://kkoygun.github.io/defect-bridge/) to GitHub Pages; each run's summary page shows the job-summary table. The report's Environment section says it was built against the stand-in. The same flow against a live Jira Cloud site is described under [Tests](#tests).
 
 ---
 

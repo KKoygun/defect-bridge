@@ -12,7 +12,9 @@
     "test:unit:watch": "vitest",
     "allure:generate": "allure generate allure-results --clean -o allure-report",
     "allure:open": "allure open allure-report",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "showcase": "ts-node scripts/showcase.ts",
+    "showcase:report": "allure generate showcase/allure-results --clean -o showcase/allure-report"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

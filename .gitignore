@@ -18,3 +18,6 @@ yarn-error.log*
 
 # The example results are committed on purpose
 !examples/allure-results/
+
+# npm run showcase output
+showcase/
