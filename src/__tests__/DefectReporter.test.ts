@@ -215,6 +215,26 @@ describe('DefectReporter', () => {
       expect(summary.passing).toBe(1);
     });
 
+    it('tracks pass → fail → pass without a run id too', async () => {
+      const { tickets } = await startFakeTrackers();
+      const file = path.join(resultsDir, 'a9e6f031-result.json');
+      const setStatus = (status: string) =>
+        fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf-8')), status }));
+
+      await new DefectReporter(configFor()).run();
+      setStatus('failed');
+      await new DefectReporter(configFor()).run();
+      setStatus('passed');
+      const third = await new DefectReporter(configFor()).run();
+
+      expect(third.passing).toBe(1);
+      expect(tickets['DEFECT-118'].comments.map((c) => (text(c).includes('passing again') ? 'passing' : 'failing'))).toEqual([
+        'passing',
+        'failing',
+        'passing',
+      ]);
+    });
+
     it('moves the ticket when JIRA_PASS_TRANSITION is set', async () => {
       const { tickets } = await startFakeTrackers();
 

@@ -185,7 +185,7 @@ export class DefectReporter {
       }
 
       const marker = this.markerFor(result);
-      if (marker && (await jira.hasComment(key, marker))) {
+      if (runId && (await jira.hasComment(key, marker))) {
         console.log(`  ↩️  ${issue.key} already has this run's comment — skipping`);
         outcome.actions.push('already reported');
         summary.duplicates++;
@@ -239,7 +239,7 @@ export class DefectReporter {
         console.warn(`  ⚠️  GitHub Issue #${result.githubIssue} not found in ${config.github!.repo} — skipping`);
         outcome.actions.push('issue not found');
         summary.skipped++;
-      } else if (marker && (await github.hasComment(result.githubIssue!, marker))) {
+      } else if (config.run.runId && (await github.hasComment(result.githubIssue!, marker))) {
         console.log(`  ↩️  #${issue.number} already has this run's comment — skipping`);
         outcome.actions.push('already reported');
         summary.duplicates++;
@@ -285,10 +285,14 @@ export class DefectReporter {
     }
   }
 
-  /** Without a run id there is nothing to tell two runs apart, so no marker. */
-  private markerFor(result: ParsedResult): string | undefined {
+  /**
+   * Always set, so the next run can tell this test was last reported failing.
+   * Only with a run id is it also used to skip duplicates; without one there is
+   * nothing to tell two runs apart.
+   */
+  private markerFor(result: ParsedResult): string {
     const { runId } = this.config.run;
-    return runId ? `defect-bridge:run=${runId};test=${testIdOf(result)}` : undefined;
+    return `defect-bridge:${runId ? `run=${runId};` : ''}test=${testIdOf(result)}`;
   }
 
   /** Always set: it is how the next run knows this test was already reported as passing. */

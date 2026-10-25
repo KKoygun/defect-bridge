@@ -100,7 +100,8 @@ abstract class RestJiraClient implements JiraClient {
   }
 
   async lastReportedState(ticketKey: string, testId: string): Promise<'failing' | 'passing' | undefined> {
-    const forThisTest = new RegExp(`defect-bridge:[^"}\\s]*;test=${escapeRegex(testId)}(?![\\w-])`);
+    // defect-bridge:[passing;][run=N;]test=ID
+    const forThisTest = new RegExp(`defect-bridge:(?:[^"}\\s]*;)?test=${escapeRegex(testId)}(?![\\w-])`);
     const newest = (await this.recentCommentBodies(ticketKey)).find((body) => forThisTest.test(body));
     if (!newest) return undefined;
     return newest.includes('defect-bridge:passing') ? 'passing' : 'failing';
