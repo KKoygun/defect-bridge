@@ -1,14 +1,20 @@
 {
   "name": "defect-bridge",
   "version": "1.0.0",
-  "description": "Links Allure test failure results to Jira defect tickets — posts failure details as comments on tagged scenarios",
+  "description": "Keeps Jira (Cloud or Data Center) and GitHub issues in step with the Allure tests tagged with them: failure, regression and passing-again comments, plus Allure categories",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "report": "ts-node scripts/run.ts",
+    "example": "ts-node scripts/run.ts --dry-run --results-dir=examples/allure-results",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "allure:generate": "allure generate allure-results --clean -o allure-report",
     "allure:open": "allure open allure-report",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "showcase": "ts-node scripts/showcase.ts",
+    "showcase:report": "allure generate showcase/allure-results --clean -o showcase/allure-report"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
@@ -18,9 +24,9 @@
     "vitest": "^4.1.5"
   },
   "dependencies": {
-    "axios": "^1.7.0",
+    "axios": "^1.20.0",
     "dotenv": "^16.4.7",
-    "form-data": "^4.0.0",
-    "zod": "^4.3.6"
+    "form-data": "^4.0.6",
+    "zod": "^4.6.7"
   }
 }

@@ -28,6 +28,8 @@ export interface AllureLink {
 
 export interface AllureResult {
   uuid: string;
+  /** Same value for the same test across runs. */
+  historyId?: string;
   name: string;
   fullName?: string;
   status: 'passed' | 'failed' | 'broken' | 'skipped' | 'unknown';
@@ -41,6 +43,8 @@ export interface AllureResult {
 
 export interface ParsedFailure {
   uuid: string;
+  /** Stable id of the test (Allure historyId, else uuid) — used to spot duplicate comments. */
+  testId?: string;
   scenarioName: string;
   fullName?: string;
   errorMessage: string;
@@ -51,4 +55,12 @@ export interface ParsedFailure {
   githubIssue?: number;
   screenshotPath?: string;
   duration?: number;
+}
+
+/** A tagged test from allure-results, failing or passing. */
+export interface ParsedResult extends ParsedFailure {
+  status: 'failed' | 'broken' | 'passed';
+  /** The result file it came from. */
+  file: string;
+  stop?: number;
 }

@@ -8,7 +8,7 @@ import { ParsedFailure } from '../allure/types';
  * block to keep the comment scannable.
  */
 export class GitHubCommentBuilder {
-  build(failure: ParsedFailure, env: string, runId?: string): string {
+  build(failure: ParsedFailure, env: string, runId?: string, marker?: string): string {
     const lines: string[] = [];
 
     lines.push('## 🔴 Automated Test Failure');
@@ -62,6 +62,9 @@ export class GitHubCommentBuilder {
     lines.push('');
     lines.push('---');
     lines.push('_Posted automatically by **defect-bridge**_');
+
+    // Hidden in the rendered comment; lets a re-run of the same CI run skip it
+    if (marker) lines.push(`<!-- ${marker} -->`);
 
     return lines.join('\n');
   }

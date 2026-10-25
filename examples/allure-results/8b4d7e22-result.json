@@ -1,0 +1,40 @@
+{
+  "stage": "finished",
+  "steps": [],
+  "parameters": [],
+  "links": [],
+  "attachments": [],
+  "uuid": "8b4d7e22-5c1a-4f0e-a3b9-0d6c4e2a9f18",
+  "historyId": "5e93b0c4d2a7f611",
+  "name": "Clear all completed todos",
+  "fullName": "TodoMVC Task Management > Clear all completed todos",
+  "status": "broken",
+  "statusDetails": {
+    "message": "expect(locator).toHaveCount(expected) failed\n\nLocator: locator('.todo-list li')\nExpected: 1\nReceived: 2",
+    "trace": "at CustomWorld.<anonymous> (src/steps/todo.steps.ts:55:5)"
+  },
+  "labels": [
+    {
+      "name": "feature",
+      "value": "TodoMVC Task Management"
+    },
+    {
+      "name": "framework",
+      "value": "cucumberjs"
+    },
+    {
+      "name": "language",
+      "value": "javascript"
+    },
+    {
+      "name": "tag",
+      "value": "@regression"
+    },
+    {
+      "name": "github_issue",
+      "value": "7"
+    }
+  ],
+  "start": 1775399530000,
+  "stop": 1775399532100
+}

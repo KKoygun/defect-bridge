@@ -1,0 +1,344 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CommentBuilder > ADF structure > matches the snapshot 1`] = `
+{
+  "body": {
+    "content": [
+      {
+        "attrs": {
+          "level": 2,
+        },
+        "content": [
+          {
+            "text": "🔴 Automated Test is Failing",
+            "type": "text",
+          },
+        ],
+        "type": "heading",
+      },
+      {
+        "type": "rule",
+      },
+      {
+        "attrs": {
+          "isNumberColumnEnabled": false,
+          "layout": "default",
+        },
+        "content": [
+          {
+            "content": [
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong",
+                          },
+                        ],
+                        "text": "Scenario",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "text": "User can add a todo item",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+            ],
+            "type": "tableRow",
+          },
+          {
+            "content": [
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong",
+                          },
+                        ],
+                        "text": "Feature",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "text": "TodoMVC Task Management > Add a todo item",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+            ],
+            "type": "tableRow",
+          },
+          {
+            "content": [
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong",
+                          },
+                        ],
+                        "text": "Environment",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "text": "staging",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+            ],
+            "type": "tableRow",
+          },
+          {
+            "content": [
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong",
+                          },
+                        ],
+                        "text": "Duration",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "text": "3s",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+            ],
+            "type": "tableRow",
+          },
+          {
+            "content": [
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong",
+                          },
+                        ],
+                        "text": "Timestamp",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "text": "2026-04-05 14:32:00 UTC",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+            ],
+            "type": "tableRow",
+          },
+          {
+            "content": [
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "marks": [
+                          {
+                            "type": "strong",
+                          },
+                        ],
+                        "text": "CI Run",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+              {
+                "attrs": {},
+                "content": [
+                  {
+                    "content": [
+                      {
+                        "text": "147",
+                        "type": "text",
+                      },
+                    ],
+                    "type": "paragraph",
+                  },
+                ],
+                "type": "tableCell",
+              },
+            ],
+            "type": "tableRow",
+          },
+        ],
+        "type": "table",
+      },
+      {
+        "type": "rule",
+      },
+      {
+        "attrs": {
+          "level": 3,
+        },
+        "content": [
+          {
+            "text": "Error",
+            "type": "text",
+          },
+        ],
+        "type": "heading",
+      },
+      {
+        "attrs": {},
+        "content": [
+          {
+            "text": "Expected element to be visible",
+            "type": "text",
+          },
+        ],
+        "type": "codeBlock",
+      },
+      {
+        "attrs": {
+          "level": 3,
+        },
+        "content": [
+          {
+            "text": "Stack Trace",
+            "type": "text",
+          },
+        ],
+        "type": "heading",
+      },
+      {
+        "attrs": {},
+        "content": [
+          {
+            "text": "at TodoPage.addTodo (src/pages/TodoPage.ts:24:5)",
+            "type": "text",
+          },
+        ],
+        "type": "codeBlock",
+      },
+      {
+        "type": "rule",
+      },
+      {
+        "content": [
+          {
+            "text": "📎 ",
+            "type": "text",
+          },
+          {
+            "marks": [
+              {
+                "type": "em",
+              },
+            ],
+            "text": "Screenshot attached to the ticket.",
+            "type": "text",
+          },
+        ],
+        "type": "paragraph",
+      },
+    ],
+    "type": "doc",
+    "version": 1,
+  },
+}
+`;

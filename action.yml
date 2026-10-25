@@ -1,0 +1,81 @@
+name: defect-bridge
+description: Keep Jira or GitHub issues in step with the Allure tests tagged with them - failures, regressions, passes
+branding:
+  icon: link
+  color: red
+
+inputs:
+  allure-results:
+    description: Path to the allure-results directory, relative to the workspace
+    default: allure-results
+  env:
+    description: Environment label shown in the comments
+    default: dev
+  dry-run:
+    description: Print the comments instead of posting them
+    default: 'false'
+  allure-categories:
+    description: Write categories.json and label tagged failures as known defect / regression in the results. Run before allure generate
+    default: 'true'
+  fail-on-report-error:
+    description: Fail the step when a ticket could not be updated (configuration errors always fail it)
+    default: 'false'
+  jira-flavor:
+    description: cloud or datacenter
+    default: cloud
+  jira-base-url:
+    description: Jira URL, e.g. https://acme.atlassian.net
+    default: ''
+  jira-email:
+    description: Jira Cloud account email
+    default: ''
+  jira-api-token:
+    description: Jira Cloud API token
+    default: ''
+  jira-pat:
+    description: Jira Data Center personal access token
+    default: ''
+  jira-reopen-transition:
+    description: Transition or status to apply when a test fails on a done ticket, e.g. Reopen. Empty means comment only
+    default: ''
+  jira-pass-transition:
+    description: Transition or status to apply when a test passes on an open ticket, e.g. Ready for QA. Empty means comment only
+    default: ''
+  github-token:
+    description: Token that can comment on issues (e.g. secrets.GITHUB_TOKEN with issues write permission)
+    default: ''
+  github-repo:
+    description: owner/repo of the issues to comment on
+    default: ${{ github.repository }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+
+    - name: Install defect-bridge
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci --no-audit --no-fund
+
+    - name: Report failures
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        ALLURE_RESULTS_DIR: ${{ github.workspace }}/${{ inputs.allure-results }}
+        ENV: ${{ inputs.env }}
+        ALLURE_CATEGORIES: ${{ inputs.allure-categories }}
+        FAIL_ON_REPORT_ERROR: ${{ inputs.fail-on-report-error }}
+        JIRA_FLAVOR: ${{ inputs.jira-flavor }}
+        JIRA_BASE_URL: ${{ inputs.jira-base-url }}
+        JIRA_EMAIL: ${{ inputs.jira-email }}
+        JIRA_API_TOKEN: ${{ inputs.jira-api-token }}
+        JIRA_PAT: ${{ inputs.jira-pat }}
+        JIRA_REOPEN_TRANSITION: ${{ inputs.jira-reopen-transition }}
+        JIRA_PASS_TRANSITION: ${{ inputs.jira-pass-transition }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPO: ${{ inputs.github-repo }}
+      run: npx ts-node scripts/run.ts ${{ inputs.dry-run == 'true' && '--dry-run' || '' }}

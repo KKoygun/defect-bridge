@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { CommentBuilder } from '../jira/CommentBuilder';
 import { ParsedFailure } from '../allure/types';
 
@@ -70,9 +70,41 @@ describe('CommentBuilder', () => {
     expect(JSON.stringify(result)).toContain('at Object.<anonymous>');
   });
 
+  it('mentions the screenshot only when there is one', () => {
+    expect(JSON.stringify(builder.build(baseFailure, 'dev'))).not.toContain('Screenshot');
+    const withScreenshot = builder.build({ ...baseFailure, screenshotPath: 'allure-results/a-attachment.png' }, 'dev');
+    expect(JSON.stringify(withScreenshot)).toContain('Screenshot attached to the ticket.');
+  });
+
   it('truncates error messages longer than 800 characters', () => {
     const failure = { ...baseFailure, errorMessage: 'e'.repeat(900) };
     const result = builder.build(failure, 'dev');
     expect(JSON.stringify(result)).toContain('truncated');
+  });
+
+  describe('ADF structure', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // A diff in this snapshot means the comment Jira shows has changed — review it on purpose.
+    it('matches the snapshot', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-04-05T14:32:00Z'));
+
+      const result = builder.build(
+        {
+          ...baseFailure,
+          fullName: 'TodoMVC Task Management > Add a todo item',
+          duration: 3,
+          errorTrace: 'at TodoPage.addTodo (src/pages/TodoPage.ts:24:5)',
+          screenshotPath: 'allure-results/abc-attachment.png',
+        },
+        'staging',
+        '147'
+      );
+
+      expect(result).toMatchSnapshot();
+    });
   });
 });
