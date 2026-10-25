@@ -70,6 +70,12 @@ describe('CommentBuilder', () => {
     expect(JSON.stringify(result)).toContain('at Object.<anonymous>');
   });
 
+  it('mentions the screenshot only when there is one', () => {
+    expect(JSON.stringify(builder.build(baseFailure, 'dev'))).not.toContain('Screenshot');
+    const withScreenshot = builder.build({ ...baseFailure, screenshotPath: 'allure-results/a-attachment.png' }, 'dev');
+    expect(JSON.stringify(withScreenshot)).toContain('Screenshot attached to the ticket.');
+  });
+
   it('truncates error messages longer than 800 characters', () => {
     const failure = { ...baseFailure, errorMessage: 'e'.repeat(900) };
     const result = builder.build(failure, 'dev');
@@ -92,6 +98,7 @@ describe('CommentBuilder', () => {
           fullName: 'TodoMVC Task Management > Add a todo item',
           duration: 3,
           errorTrace: 'at TodoPage.addTodo (src/pages/TodoPage.ts:24:5)',
+          screenshotPath: 'allure-results/abc-attachment.png',
         },
         'staging',
         '147'

@@ -330,7 +330,7 @@ exports[`CommentBuilder > ADF structure > matches the snapshot 1`] = `
                 "type": "em",
               },
             ],
-            "text": "Screenshot attached to this comment if available.",
+            "text": "Screenshot attached to the ticket.",
             "type": "text",
           },
         ],

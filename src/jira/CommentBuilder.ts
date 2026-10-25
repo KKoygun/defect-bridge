@@ -32,7 +32,8 @@ export class CommentBuilder {
             ? [this.heading('Stack Trace', 3), this.codeBlock(this.trimTrace(failure.errorTrace, 1500))]
             : []),
           this.divider(),
-          this.note('Screenshot attached to this comment if available.'),
+          // Jira attaches files to the ticket, not to a comment
+          ...(failure.screenshotPath ? [this.note('Screenshot attached to the ticket.')] : []),
           // Lets a re-run of the same CI run find this comment and skip it
           ...(marker ? [this.marker(marker)] : []),
         ],

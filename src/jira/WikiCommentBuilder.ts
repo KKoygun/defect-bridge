@@ -28,7 +28,7 @@ export class WikiCommentBuilder {
       '{code}',
       ...(failure.errorTrace ? ['h4. Stack Trace', '{code}', trim(failure.errorTrace, 1500), '{code}'] : []),
       '----',
-      '_Screenshot attached to this comment if available._',
+      ...(failure.screenshotPath ? ['_Screenshot attached to the ticket._'] : []),
       // Lets a re-run of the same CI run find this comment and skip it
       ...(marker ? [`{{${marker}}}`] : []),
     ];

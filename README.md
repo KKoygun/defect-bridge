@@ -66,7 +66,7 @@ Use `@allure.label.github_issue=7` to link a GitHub issue instead (or as well).
     │   at TodoPage.addTodo (src/pages/TodoPage.ts:42:24)
     │   at CustomWorld.<anonymous> (src/steps/todo.steps.ts:22:3)
     │ ────────────────────────────────────────
-    │ 📎 Screenshot attached to this comment if available.
+    │ 📎 Screenshot attached to the ticket.
     │ defect-bridge:run=147;test=c1a8e2f7a9b14d3e
   [DRY RUN] Would attach examples\allure-results\3f1c2a10-attachment.png
 
@@ -153,7 +153,7 @@ at TodoPage.addTodo (src/pages/TodoPage.ts:42:24)
 at CustomWorld.<anonymous> (src/steps/todo.steps.ts:22:3)
 {code}
 ----
-_Screenshot attached to this comment if available._
+_Screenshot attached to the ticket._
 {{defect-bridge:run=147;test=c1a8e2f7a9b14d3e}}
 ```
 
