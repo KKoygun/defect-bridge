@@ -246,7 +246,15 @@ Run defect-bridge **before** `allure generate` so the report picks this up. Cate
 
 A Jira outage should not turn a red test run into a confusing pipeline failure; misconfiguration should be loud.
 
-**Job summary** — inside GitHub Actions the outcome is also written to the run's summary page.
+**Job summary** — inside GitHub Actions the outcome is also written to the run's summary page, next to each ticket's status, priority and assignee as read during the run. Triage can start from the run page without opening Jira. The rows below are what the unit test asserts against the fake Jira (DEFECT-123 done, `JIRA_REOPEN_TRANSITION=Reopen`):
+
+| Scenario | Test | Ticket | Status | Priority | Assignee | defect-bridge |
+|---|---|---|---|---|---|---|
+| Add a single todo item | ❌ failed | DEFECT-123 | Done | High | Ada Tester | regression comment, moved to To Do |
+| Complete a todo item | ✅ passed | DEFECT-118 | In Progress | High | Ada Tester | passing comment |
+| Clear all completed todos | ⚠️ broken | #7 | open | — | — | failure comment |
+
+Ticket keys link to Jira and GitHub. Status is the one found before any transition; the last column says where the ticket was moved.
 
 ---
 
@@ -390,7 +398,7 @@ npm run test:unit
 npm run typecheck
 ```
 
-Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, the ticket lifecycle against a fake Jira that keeps status and comments between runs (regression, reopen, passing once, transition missing), the Allure category labels on a copy of the example results, and the CLI exit codes. Nothing calls a real tracker.
+Unit tests cover the parser edge cases, the ADF comment (snapshot), both Jira clients and the GitHub client over real HTTP against a local fake server (auth failure, missing ticket, attachment upload, marker lookup), retries, the duplicate check across two runs, the job summary table, the ticket lifecycle against a fake Jira that keeps status and comments between runs (regression, reopen, passing once, transition missing), the Allure category labels on a copy of the example results, and the CLI exit codes. Nothing calls a real tracker.
 
 What each destination has been checked against:
 

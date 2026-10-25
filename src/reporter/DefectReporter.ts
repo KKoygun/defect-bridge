@@ -33,7 +33,8 @@ export interface Outcome {
   result: ParsedResult;
   jiraIssue?: JiraIssue;
   githubIssue?: GitHubIssue;
-  action: string;
+  /** What defect-bridge did, e.g. "regression comment", "moved to To Do". */
+  actions: string[];
 }
 
 /**
@@ -111,11 +112,11 @@ export class DefectReporter {
 
       if (this.dryRun) {
         this.preview(result, summary);
-        outcomes.push({ result, action: 'preview' });
+        outcomes.push({ result, actions: ['dry run, comment printed'] });
         continue;
       }
 
-      const outcome: Outcome = { result, action: 'none' };
+      const outcome: Outcome = { result, actions: [] };
 
       if (this.jira && result.jiraTicket) {
         await this.reportToJira(this.jira, result, outcome, summary);
@@ -154,7 +155,7 @@ export class DefectReporter {
       const issue = await jira.getIssue(key);
       if (!issue) {
         console.warn(`  ⚠️  Jira ticket not found: ${key} — skipping`);
-        outcome.action = 'ticket not found';
+        outcome.actions.push('ticket not found');
         summary.skipped++;
         return;
       }
@@ -165,19 +166,19 @@ export class DefectReporter {
       if (result.status === 'passed') {
         if (done) {
           console.log('  ✔️  Test passes and the ticket is done — nothing to do');
-          outcome.action = 'none';
+          outcome.actions.push('nothing to do');
           return;
         }
         // One "passing again" comment per test, until it fails again
         if ((await jira.lastReportedState(key, testIdOf(result))) === 'passing') {
           console.log('  ↩️  Already reported as passing — skipping');
-          outcome.action = 'already reported passing';
+          outcome.actions.push('already reported passing');
           summary.duplicates++;
           return;
         }
         await jira.addPassingComment(key, result, { env, runId, marker: this.passingMarkerFor(result) });
         console.log('  🟢 Passing comment posted');
-        outcome.action = 'passing comment';
+        outcome.actions.push('passing comment');
         summary.passing++;
         await this.applyTransition(jira, key, this.config.lifecycle.passTransition, outcome);
         return;
@@ -186,7 +187,7 @@ export class DefectReporter {
       const marker = this.markerFor(result);
       if (marker && (await jira.hasComment(key, marker))) {
         console.log(`  ↩️  ${issue.key} already has this run's comment — skipping`);
-        outcome.action = 'already reported';
+        outcome.actions.push('already reported');
         summary.duplicates++;
         return;
       }
@@ -194,11 +195,11 @@ export class DefectReporter {
       await jira.addComment(key, result, { env, runId, marker, regressionOf: done ? issue.status : undefined });
       if (done) {
         console.log(`  🔁 Regression comment posted (ticket is ${issue.status})`);
-        outcome.action = 'regression comment';
+        outcome.actions.push('regression comment');
         summary.regressions++;
       } else {
         console.log('  ✅ Jira comment posted');
-        outcome.action = 'failure comment';
+        outcome.actions.push('failure comment');
         summary.reported++;
       }
 
@@ -210,7 +211,7 @@ export class DefectReporter {
       if (done) await this.applyTransition(jira, key, this.config.lifecycle.reopenTransition, outcome);
     } catch (err) {
       console.error(`  ❌ Jira error: ${err instanceof Error ? err.message : err}`);
-      outcome.action = 'error';
+      outcome.actions.push('Jira error');
       summary.errored++;
     }
   }
@@ -221,9 +222,10 @@ export class DefectReporter {
     const status = await jira.transition(key, name);
     if (status) {
       console.log(`  ➡️  Moved to ${status}`);
-      outcome.action += `, moved to ${status}`;
+      outcome.actions.push(`moved to ${status}`);
     } else {
       console.warn(`  ⚠️  No "${name}" transition available on ${key} — status left as is`);
+      outcome.actions.push(`no "${name}" transition`);
     }
   }
 
@@ -235,19 +237,23 @@ export class DefectReporter {
       if (issue) outcome.githubIssue = issue;
       if (!issue) {
         console.warn(`  ⚠️  GitHub Issue #${result.githubIssue} not found in ${config.github!.repo} — skipping`);
+        outcome.actions.push('issue not found');
         summary.skipped++;
       } else if (marker && (await github.hasComment(result.githubIssue!, marker))) {
         console.log(`  ↩️  #${issue.number} already has this run's comment — skipping`);
+        outcome.actions.push('already reported');
         summary.duplicates++;
       } else {
         console.log(`  GitHub: #${issue.number} — ${issue.title}`);
         const body = this.githubCommentBuilder.build(result, config.run.env, config.run.runId, marker);
         await github.addComment(result.githubIssue!, body);
         console.log('  ✅ GitHub comment posted');
+        outcome.actions.push('failure comment');
         summary.reported++;
       }
     } catch (err) {
       console.error(`  ❌ GitHub error: ${err instanceof Error ? err.message : err}`);
+      outcome.actions.push('GitHub error');
       summary.errored++;
     }
   }
@@ -328,6 +334,8 @@ export class DefectReporter {
   /**
    * Writes a Markdown summary table to $GITHUB_STEP_SUMMARY so the report is
    * visible directly on the Actions run page — no artifact download required.
+   * Each tagged test is shown next to its ticket's status, priority and
+   * assignee as read during this run, so triage can start from the run page.
    * No-op when running outside GitHub Actions.
    */
   private writeStepSummary(outcomes: Outcome[], summary: ReportSummary): void {
@@ -346,13 +354,22 @@ export class DefectReporter {
     if (outcomes.length === 0) {
       lines.push('✅ No tests with issue tags found.');
     } else {
-      lines.push('| Scenario | Test | Jira | GitHub |');
-      lines.push('|---|---|---|---|');
+      lines.push('| Scenario | Test | Ticket | Status | Priority | Assignee | defect-bridge |');
+      lines.push('|---|---|---|---|---|---|---|');
 
-      for (const { result } of outcomes) {
-        const jira = result.jiraTicket  ? `\`${result.jiraTicket}\`` : '—';
-        const gh   = result.githubIssue ? `#${result.githubIssue}`   : '—';
-        lines.push(`| ${result.scenarioName} | ${result.status} | ${jira} | ${gh} |`);
+      for (const { result, jiraIssue, githubIssue, actions } of outcomes) {
+        const tickets = [
+          result.jiraTicket  ? this.jiraLink(result.jiraTicket) : undefined,
+          result.githubIssue ? this.githubLink(result.githubIssue) : undefined,
+        ].filter(Boolean).join('<br>');
+        const status = [jiraIssue?.status, githubIssue?.state].filter(Boolean).join('<br>') || '—';
+        const priority = jiraIssue?.priority ?? '—';
+        const assignee = jiraIssue ? (jiraIssue.assignee ?? 'Unassigned') : '—';
+
+        lines.push(
+          `| ${cell(result.scenarioName)} | ${STATUS_ICON[result.status]} ${result.status} | ${tickets} | ${cell(status)} | ` +
+            `${cell(priority)} | ${cell(assignee)} | ${cell(actions.join(', ') || '—')} |`
+        );
       }
 
       lines.push('');
@@ -366,6 +383,24 @@ export class DefectReporter {
     lines.push('');
     fs.appendFileSync(summaryPath, lines.join('\n'));
   }
+
+  private jiraLink(key: string): string {
+    const base = this.config.jira?.baseUrl.replace(/\/$/, '');
+    return base ? `[${key}](${base}/browse/${key})` : `\`${key}\``;
+  }
+
+  private githubLink(issue: number): string {
+    const repo = this.config.github?.repo;
+    const server = process.env.GITHUB_SERVER_URL ?? 'https://github.com';
+    return repo ? `[#${issue}](${server}/${repo}/issues/${issue})` : `#${issue}`;
+  }
+}
+
+const STATUS_ICON: Record<ParsedResult['status'], string> = { failed: '❌', broken: '⚠️', passed: '✅' };
+
+/** Keeps a value from breaking the Markdown table. */
+function cell(text: string): string {
+  return text.replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 function testIdOf(result: ParsedResult): string {

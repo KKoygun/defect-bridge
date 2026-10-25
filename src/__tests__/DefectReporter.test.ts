@@ -279,6 +279,27 @@ describe('DefectReporter', () => {
     });
   });
 
+  describe('GitHub Actions job summary', () => {
+    it('shows each test next to its ticket status, priority, assignee and what was done', async () => {
+      await startFakeTrackers({ 'DEFECT-123': 'done' });
+      const summaryFile = path.join(resultsDir, 'step-summary.md');
+      vi.stubEnv('GITHUB_STEP_SUMMARY', summaryFile);
+      vi.stubEnv('GITHUB_SERVER_URL', 'https://github.com');
+
+      await new DefectReporter(configFor('147', { JIRA_REOPEN_TRANSITION: 'Reopen' })).run();
+
+      const rows = fs.readFileSync(summaryFile, 'utf-8').split('\n');
+      expect(rows).toContain('| Scenario | Test | Ticket | Status | Priority | Assignee | defect-bridge |');
+      expect(rows).toContain(
+        `| Add a single todo item | ❌ failed | [DEFECT-123](${server!.url}/browse/DEFECT-123) | Done | High | Ada Tester | regression comment, moved to To Do |`
+      );
+      expect(rows).toContain(
+        `| Complete a todo item | ✅ passed | [DEFECT-118](${server!.url}/browse/DEFECT-118) | In Progress | High | Ada Tester | passing comment |`
+      );
+      expect(rows).toContain('| Clear all completed todos | ⚠️ broken | [#7](https://github.com/acme/app/issues/7) | open | — | — | failure comment |');
+    });
+  });
+
   it('counts a failed update as an error and keeps going', async () => {
     server = await startFakeServer((req): Reply =>
       req.url.startsWith('/rest') ? { status: 401, body: {} } : { status: 404, body: {} }
